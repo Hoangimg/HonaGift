@@ -2,49 +2,64 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
-
-body{
-    margin:0;
-    background:#1e1e1e;
-    color:white;
-    font-family:Arial;
-    text-align:center;
+body {
+    margin: 0;
+    background: #1e1e1e;
+    color: white;
+    font-family: Arial;
+    text-align: center;
+    /* Lớp khiên 1 */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-h2{
-    margin-top:20px;
+h2 {
+    margin-top: 20px;
 }
 
-.row{
-    display:flex;
-    justify-content:center;
+.row {
+    display: flex;
+    justify-content: center;
 }
 
-.btn{
-    width:110px;
-    height:110px;
-    margin:10px;
-    border:none;
-    border-radius:20px;
-    font-size:45px;
-    background:#333;
-    color:white;
+.btn {
+    width: 110px;
+    height: 110px;
+    margin: 10px;
+    border: none;
+    border-radius: 20px;
+    font-size: 45px;
+    background: #333;
+    color: white;
+    touch-action: manipulation; /* Chống double-tap zoom */
+    outline: none;
 }
 
-.stop{
-    background:#d32f2f;
+.btn:active {
+    background: #555; /* Thêm hiệu ứng lún nút cho có cảm giác */
 }
 
-.status{
-    margin:20px;
-    font-size:20px;
+.stop {
+    background: #d32f2f;
 }
 
+.stop:active {
+    background: #b71c1c;
+}
+
+.status {
+    margin: 20px;
+    font-size: 20px;
+}
 </style>
 </head>
 
@@ -52,14 +67,13 @@ h2{
 
 <h2>KAYRA ROBOT</h2>
 
-<div class="status" id="status">
-Disconnected
-</div>
+<div class="status" id="status">Disconnected</div>
 
 <div class="row">
   <button class="btn"
     ontouchstart="send('F')"
     ontouchend="send('S')"
+    ontouchcancel="send('S')"
     onmousedown="send('F')"
     onmouseup="send('S')">↑</button>
 </div>
@@ -68,6 +82,7 @@ Disconnected
   <button class="btn"
     ontouchstart="send('L')"
     ontouchend="send('S')"
+    ontouchcancel="send('S')"
     onmousedown="send('L')"
     onmouseup="send('S')">←</button>
 
@@ -77,6 +92,7 @@ Disconnected
   <button class="btn"
     ontouchstart="send('R')"
     ontouchend="send('S')"
+    ontouchcancel="send('S')"
     onmousedown="send('R')"
     onmouseup="send('S')">→</button>
 </div>
@@ -85,39 +101,36 @@ Disconnected
   <button class="btn"
     ontouchstart="send('B')"
     ontouchend="send('S')"
+    ontouchcancel="send('S')"
     onmousedown="send('B')"
     onmouseup="send('S')">↓</button>
 </div>
 
 <script>
-
 const client = mqtt.connect(
 'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',
 {
-    username:'Kayra',
-    password:'KayraandHona24/6/2025'
+    username: 'Kayra',
+    password: 'KayraandHona24/6/2025'
 });
 
-client.on('connect',()=>{
-    document.getElementById('status').innerHTML =
-    'Connected';
+// Lớp khiên 2: Giết menu chuột phải / hold
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+client.on('connect', () => {
+    document.getElementById('status').innerHTML = 'Connected';
+    document.getElementById('status').style.color = '#4CAF50';
 });
 
-client.on('error',()=>{
-    document.getElementById('status').innerHTML =
-    'Error';
+client.on('error', () => {
+    document.getElementById('status').innerHTML = 'Error';
+    document.getElementById('status').style.color = '#f44336';
 });
 
-function send(cmd){
-
-    client.publish(
-        'robot/cmd',
-        JSON.stringify({cmd:cmd})
-    );
-
+function send(cmd) {
+    client.publish('robot/cmd', JSON.stringify({cmd: cmd}));
     console.log(cmd);
 }
-
 </script>
 
 </body>
