@@ -3,135 +3,127 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
 <style>
-body {
-    margin: 0;
-    background: #1e1e1e;
-    color: white;
-    font-family: Arial;
-    text-align: center;
-    /* Lớp khiên 1 */
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
+*{
+    -webkit-touch-callout: none;   /* Tắt menu "Copy/Save" khi long-press trên iOS */
+    -webkit-user-select: none;     /* Tắt bôi đen/chọn text */
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+    -webkit-tap-highlight-color: transparent; /* Tắt highlight xám khi chạm */
 }
-
-h2 {
-    margin-top: 20px;
+html, body{
+    margin:0;
+    background:#1e1e1e;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+    overflow:hidden;       /* Tắt scroll/bounce gây mất sự kiện touchend */
+    overscroll-behavior:none;
+    touch-action:none;     /* Tắt pan/zoom/scroll mặc định của trình duyệt trên toàn trang */
+    height:100%;
 }
-
-.row {
-    display: flex;
-    justify-content: center;
+h2{
+    margin-top:20px;
 }
-
-.btn {
-    width: 110px;
-    height: 110px;
-    margin: 10px;
-    border: none;
-    border-radius: 20px;
-    font-size: 45px;
-    background: #333;
-    color: white;
-    touch-action: manipulation; /* Chống double-tap zoom */
-    outline: none;
+.row{
+    display:flex;
+    justify-content:center;
 }
-
-.btn:active {
-    background: #555; /* Thêm hiệu ứng lún nút cho có cảm giác */
+.btn{
+    width:110px;
+    height:110px;
+    margin:10px;
+    border:none;
+    border-radius:20px;
+    font-size:45px;
+    background:#333;
+    color:white;
+    touch-action:none;     /* Quan trọng: chặn long-press / context menu của trình duyệt trên nút */
 }
-
-.stop {
-    background: #d32f2f;
+.btn:active{
+    background:#555;       /* Phản hồi thị giác khi nhấn, thay cho hành vi mặc định */
 }
-
-.stop:active {
-    background: #b71c1c;
+.stop{
+    background:#d32f2f;
 }
-
-.status {
-    margin: 20px;
-    font-size: 20px;
+.status{
+    margin:20px;
+    font-size:20px;
 }
 </style>
 </head>
-
-<body>
-
+<body oncontextmenu="return false">
 <h2>KAYRA ROBOT</h2>
-
-<div class="status" id="status">Disconnected</div>
-
-<div class="row">
-  <button class="btn"
-    ontouchstart="send('F')"
-    ontouchend="send('S')"
-    ontouchcancel="send('S')"
-    onmousedown="send('F')"
-    onmouseup="send('S')">↑</button>
+<div class="status" id="status">
+Disconnected
 </div>
-
 <div class="row">
-  <button class="btn"
-    ontouchstart="send('L')"
-    ontouchend="send('S')"
-    ontouchcancel="send('S')"
-    onmousedown="send('L')"
-    onmouseup="send('S')">←</button>
-
-  <button class="btn stop"
-    onclick="send('S')">■</button>
-
-  <button class="btn"
-    ontouchstart="send('R')"
-    ontouchend="send('S')"
-    ontouchcancel="send('S')"
-    onmousedown="send('R')"
-    onmouseup="send('S')">→</button>
+  <button class="btn" data-cmd="F">↑</button>
 </div>
-
 <div class="row">
-  <button class="btn"
-    ontouchstart="send('B')"
-    ontouchend="send('S')"
-    ontouchcancel="send('S')"
-    onmousedown="send('B')"
-    onmouseup="send('S')">↓</button>
+  <button class="btn" data-cmd="L">←</button>
+  <button class="btn stop" data-cmd="STOP">■</button>
+  <button class="btn" data-cmd="R">→</button>
 </div>
-
+<div class="row">
+  <button class="btn" data-cmd="B">↓</button>
+</div>
 <script>
 const client = mqtt.connect(
 'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',
 {
-    username: 'Kayra',
-    password: 'KayraandHona24/6/2025'
+    username:'Kayra',
+    password:'KayraandHona24/6/2025'
 });
-
-// Lớp khiên 2: Giết menu chuột phải / hold
-document.addEventListener('contextmenu', e => e.preventDefault());
-
-client.on('connect', () => {
+client.on('connect',()=>{
     document.getElementById('status').innerHTML = 'Connected';
-    document.getElementById('status').style.color = '#4CAF50';
 });
-
-client.on('error', () => {
+client.on('error',()=>{
     document.getElementById('status').innerHTML = 'Error';
-    document.getElementById('status').style.color = '#f44336';
 });
 
-function send(cmd) {
-    client.publish('robot/cmd', JSON.stringify({cmd: cmd}));
+function send(cmd){
+    client.publish('robot/cmd', JSON.stringify({cmd:cmd}));
     console.log(cmd);
 }
-</script>
 
+// Gắn sự kiện bằng JS thay vì onmousedown/ontouchstart trong HTML,
+// dùng { passive:false } để có thể preventDefault() -> chặn long-press menu, chọn text, kéo trang.
+document.querySelectorAll('.btn').forEach(btn=>{
+    const cmd = btn.dataset.cmd;
+
+    if(cmd === 'STOP'){
+        btn.addEventListener('click', e=>{
+            e.preventDefault();
+            send('S');
+        });
+        return;
+    }
+
+    const start = e=>{
+        e.preventDefault();
+        send(cmd);
+    };
+    const end = e=>{
+        e.preventDefault();
+        send('S');
+    };
+
+    btn.addEventListener('touchstart', start, {passive:false});
+    btn.addEventListener('touchend', end, {passive:false});
+    btn.addEventListener('touchcancel', end, {passive:false}); // quan trọng: khi hệ thống "nuốt" touch (ví dụ hộp thoại bật lên), vẫn nhận lệnh dừng
+
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('mouseup', end);
+    btn.addEventListener('mouseleave', end); // nếu rê chuột ra ngoài nút mà vẫn giữ, robot không bị kẹt
+});
+
+// Lưới an toàn cuối cùng: nếu vì lý do gì đó tay rời khỏi màn hình mà
+// không bắn đúng sự kiện touchend trên nút, vẫn gửi STOP toàn cục.
+document.addEventListener('touchend', ()=> send('S'), {passive:true});
+window.addEventListener('blur', ()=> send('S'));
+</script>
 </body>
 </html>
