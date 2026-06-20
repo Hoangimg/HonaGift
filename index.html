@@ -52,6 +52,21 @@ h2{
     margin:20px;
     font-size:20px;
 }
+.speed-box{
+    margin:25px auto;
+    width:80%;
+    max-width:320px;
+}
+.speed-box label{
+    display:block;
+    margin-bottom:8px;
+    font-size:18px;
+}
+.speed-box input[type=range]{
+    width:100%;
+    height:30px;
+    touch-action:pan-x;   /* Cho phép kéo ngang trên thanh trượt, dù toàn trang đã touch-action:none */
+}
 </style>
 </head>
 <body oncontextmenu="return false">
@@ -59,6 +74,12 @@ h2{
 <div class="status" id="status">
 Disconnected
 </div>
+
+<div class="speed-box">
+  <label for="speedSlider">Tốc độ: <span id="speedValue">200</span> / 255</label>
+  <input type="range" id="speedSlider" min="60" max="255" value="200">
+</div>
+
 <div class="row">
   <button class="btn" data-cmd="F">↑</button>
 </div>
@@ -84,9 +105,42 @@ client.on('error',()=>{
     document.getElementById('status').innerHTML = 'Error';
 });
 
+// ---- Tốc độ ----
+let speed = 200;
+const speedSlider = document.getElementById('speedSlider');
+const speedValue = document.getElementById('speedValue');
+
+speedSlider.addEventListener('input', ()=>{
+    speed = parseInt(speedSlider.value, 10);
+    speedValue.textContent = speed;
+    // Nếu đang giữ nút di chuyển, gửi ngay tốc độ mới thay vì chờ heartbeat
+    if(currentDir) send(currentDir);
+});
+
 function send(cmd){
-    client.publish('robot/cmd', JSON.stringify({cmd:cmd}));
-    console.log(cmd);
+    client.publish('robot/cmd', JSON.stringify({cmd:cmd, speed:speed}));
+    console.log(cmd, speed);
+}
+
+// ---- Giữ nút = gửi lệnh lặp lại (heartbeat) ----
+// ESP32 có watchdog: nếu quá ~600ms không nhận lệnh mới sẽ tự dừng động cơ.
+// Vì vậy khi giữ nút phải gửi lại lệnh đều đặn, không chỉ gửi 1 lần lúc chạm.
+let currentDir = null;
+let holdTimer = null;
+const HEARTBEAT_MS = 200; // phải nhỏ hơn nhiều so với watchdog timeout bên ESP32
+
+function startHold(cmd){
+    currentDir = cmd;
+    send(cmd);                 // gửi ngay lập tức, không chờ tick đầu tiên
+    clearInterval(holdTimer);
+    holdTimer = setInterval(()=> send(cmd), HEARTBEAT_MS);
+}
+
+function stopHold(){
+    clearInterval(holdTimer);
+    holdTimer = null;
+    currentDir = null;
+    send('S');
 }
 
 // Gắn sự kiện bằng JS thay vì onmousedown/ontouchstart trong HTML,
@@ -97,18 +151,18 @@ document.querySelectorAll('.btn').forEach(btn=>{
     if(cmd === 'STOP'){
         btn.addEventListener('click', e=>{
             e.preventDefault();
-            send('S');
+            stopHold();
         });
         return;
     }
 
     const start = e=>{
         e.preventDefault();
-        send(cmd);
+        startHold(cmd);
     };
     const end = e=>{
         e.preventDefault();
-        send('S');
+        stopHold();
     };
 
     btn.addEventListener('touchstart', start, {passive:false});
@@ -121,9 +175,9 @@ document.querySelectorAll('.btn').forEach(btn=>{
 });
 
 // Lưới an toàn cuối cùng: nếu vì lý do gì đó tay rời khỏi màn hình mà
-// không bắn đúng sự kiện touchend trên nút, vẫn gửi STOP toàn cục.
-document.addEventListener('touchend', ()=> send('S'), {passive:true});
-window.addEventListener('blur', ()=> send('S'));
+// không bắn đúng sự kiện touchend trên nút, vẫn dừng heartbeat + gửi STOP.
+document.addEventListener('touchend', stopHold, {passive:true});
+window.addEventListener('blur', stopHold);
 </script>
 </body>
 </html>
