@@ -5,179 +5,894 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-*{
-    -webkit-touch-callout: none;   /* Tắt menu "Copy/Save" khi long-press trên iOS */
-    -webkit-user-select: none;     /* Tắt bôi đen/chọn text */
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent; /* Tắt highlight xám khi chạm */
-}
-html, body{
-    margin:0;
-    background:#1e1e1e;
-    color:white;
-    font-family:Arial;
-    text-align:center;
-    overflow:hidden;       /* Tắt scroll/bounce gây mất sự kiện touchend */
-    overscroll-behavior:none;
-    touch-action:none;     /* Tắt pan/zoom/scroll mặc định của trình duyệt trên toàn trang */
-    height:100%;
-}
-h2{
-    margin-top:20px;
-}
-.row{
-    display:flex;
-    justify-content:center;
-}
+*{box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;background:#1e1e1e;color:#fff;font-family:Arial,sans-serif;text-align:center;overflow:hidden;overscroll-behavior:none;touch-action:none;height:100%;width:100%;position:relative;}
+
+/* ── Background ── */
+#bgLayer{position:fixed;inset:0;z-index:0;background:#1e1e1e;background-size:cover;background-position:center;transition:background .3s;}
+#decorLayer{position:absolute;inset:0;pointer-events:none;}
+#decorLayer img{position:absolute;transform:translate(-50%,-50%);max-width:none;}
+
+/* ── App shell ── */
+#app{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;justify-content:center;position:relative;padding-top:14px;}
+h2{margin:6px 0;font-size:20px;text-shadow:0 1px 4px rgba(0,0,0,.8);letter-spacing:.5px;}
+.gearBtn{position:absolute;right:14px;top:10px;width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:22px;touch-action:none;cursor:pointer;}
+#status{margin:6px;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.7);}
+.speed-box{margin:8px auto;width:82%;max-width:320px;background:rgba(0,0,0,.35);padding:10px;border-radius:14px;}
+.speed-box label{display:block;margin-bottom:5px;font-size:14px;}
+.speed-box input[type=range]{width:100%;height:30px;touch-action:pan-x;}
+
+/* ── Edit bar ── */
+.editBar{display:none;align-items:center;justify-content:center;gap:10px;padding:5px 10px;background:rgba(0,0,0,.55);}
+.editBar.open{display:flex;}
+.editBar span{font-size:12px;color:#a0d4ff;}
+.editToggle{padding:5px 14px;border:none;border-radius:8px;font-size:13px;cursor:pointer;}
+.editToggle.on{background:#4caf50;color:#fff;}
+.editToggle.off{background:#444;color:#ccc;}
+
+/* ── Controls canvas ── */
+.controls{margin-top:auto;margin-bottom:12px;overflow-y:auto;max-height:62vh;}
+.btn-row{display:flex;justify-content:center;flex-wrap:wrap;}
+
+/* ── Button base ── */
 .btn{
-    width:110px;
-    height:110px;
-    margin:10px;
-    border:none;
-    border-radius:20px;
-    font-size:45px;
-    background:#333;
-    color:white;
-    touch-action:none;     /* Quan trọng: chặn long-press / context menu của trình duyệt trên nút */
+  margin:6px;border:none;color:#fff;
+  touch-action:none;background-size:cover;background-position:center;
+  box-shadow:0 3px 10px rgba(0,0,0,.5);cursor:pointer;
+  position:relative;transition:filter .12s, box-shadow .12s;
+  display:inline-flex;align-items:center;justify-content:center;overflow:hidden;
 }
-.btn:active{
-    background:#555;       /* Phản hồi thị giác khi nhấn, thay cho hành vi mặc định */
-}
-.stop{
-    background:#d32f2f;
-}
-.status{
-    margin:20px;
-    font-size:20px;
-}
-.speed-box{
-    margin:25px auto;
-    width:80%;
-    max-width:320px;
-}
-.speed-box label{
-    display:block;
-    margin-bottom:8px;
-    font-size:18px;
-}
-.speed-box input[type=range]{
-    width:100%;
-    height:30px;
-    touch-action:pan-x;   /* Cho phép kéo ngang trên thanh trượt, dù toàn trang đã touch-action:none */
-}
+.btn .lbl{pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.9);line-height:1.1;white-space:pre-line;}
+.btn.has-img .lbl{display:none;}
+.btn.active-press{filter:brightness(1.6) saturate(1.3);}
+.btn.toggled-on{box-shadow:0 0 0 3px #4caf50,0 3px 10px rgba(0,0,0,.5)!important;}
+
+/* Edit-mode overlays */
+.btn-badge{position:absolute;top:3px;left:3px;font-size:9px;background:rgba(0,0,0,.65);color:#a0d4ff;border-radius:4px;padding:1px 4px;pointer-events:none;display:none;line-height:1.4;}
+.controls.edit-mode .btn-badge{display:block;}
+.controls.edit-mode .btn{box-shadow:0 0 0 2px #4caf50,0 3px 10px rgba(0,0,0,.5);}
+
+/* Add-button placeholder */
+.btn-add{border:2px dashed #555!important;background:rgba(0,0,0,.15)!important;color:#777;display:none;width:80px;height:80px;border-radius:16px;font-size:28px;}
+.controls.edit-mode .btn-add{display:inline-flex;}
+
+/* ══════════ SETTINGS OVERLAY ══════════ */
+.overlay{position:fixed;inset:0;z-index:10;background:rgba(10,10,10,.96);display:none;flex-direction:column;touch-action:pan-y;overflow-y:auto;padding:14px 14px 30px;}
+.overlay.open{display:flex;}
+.panelHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.panelHead h3{margin:0;font-size:18px;letter-spacing:.3px;}
+.closeBtn{width:38px;height:38px;border-radius:50%;border:none;background:#444;color:#fff;font-size:20px;cursor:pointer;}
+.section{background:#232323;border-radius:14px;padding:14px;margin-bottom:14px;text-align:left;}
+.section h4{margin:0 0 10px 0;font-size:14px;color:#9fd3ff;text-transform:uppercase;letter-spacing:.5px;}
+
+/* Icon grid */
+.iconGrid{display:flex;flex-wrap:wrap;gap:10px;}
+.iconCard{background:#191919;border-radius:12px;padding:10px;min-width:140px;flex:1;}
+.iconCard-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.iconCard-name{font-size:12px;font-weight:bold;color:#ccc;}
+.iconCard-del{border:none;background:#5b2020;color:#fff;border-radius:6px;font-size:11px;padding:2px 8px;cursor:pointer;}
+.iconPreview{width:60px;height:60px;margin:0 auto 6px;border-radius:12px;background:#333;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:26px;}
+.presetRow{display:flex;gap:5px;justify-content:center;margin:6px 0;flex-wrap:wrap;}
+.presetThumb{width:30px;height:30px;border-radius:6px;border:2px solid transparent;background:#444;background-size:cover;background-position:center;cursor:pointer;}
+.presetThumb.active{border-color:#4caf50;}
+.miniBtn{width:100%;padding:6px 0;margin-top:5px;border:none;border-radius:8px;background:#383838;color:#fff;font-size:12px;cursor:pointer;}
+.miniBtn.danger{background:#5b2020;}
+.miniBtn.primary{background:#1565c0;}
+.miniBtn.green{background:#2e7d32;}
+.fileBtn{display:inline-block;padding:7px 12px;background:#1e5b8a;border-radius:8px;font-size:12px;cursor:pointer;color:#fff;margin-top:5px;}
+input[type=file]{display:none;}
+
+/* Cmd section inside icon card */
+.cmdSec{margin-top:8px;border-top:1px solid #2e2e2e;padding-top:8px;}
+.cmdSec .row-label{font-size:10px;color:#9fd3ff;margin-bottom:2px;display:block;}
+.cmdSec input,.cmdSec select{width:100%;padding:5px 7px;background:#0e0e0e;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:12px;margin-bottom:5px;}
+.modeRow{display:flex;gap:5px;margin-bottom:7px;}
+.modeBtn{flex:1;padding:5px 2px;border:2px solid #3a3a3a;border-radius:7px;background:transparent;color:#888;font-size:10px;cursor:pointer;}
+.modeBtn.active{border-color:#4caf50;color:#4caf50;background:rgba(76,175,80,.1);}
+
+/* Size / shape section */
+.shapeSec{margin-top:8px;border-top:1px solid #2e2e2e;padding-top:8px;}
+.shapeSec .row-label{font-size:10px;color:#f0c060;margin-bottom:2px;display:block;}
+.shapeSec .srow{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.shapeSec .srow span{font-size:11px;color:#aaa;min-width:52px;}
+.shapeSec .srow input[type=range]{flex:1;height:24px;touch-action:pan-x;}
+.shapeSec .srow .val{font-size:11px;color:#fff;min-width:26px;text-align:right;}
+.shapeGrid{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;}
+.shapeChip{padding:5px 10px;border:2px solid #3a3a3a;border-radius:8px;background:transparent;color:#888;font-size:11px;cursor:pointer;}
+.shapeChip.active{border-color:#f0c060;color:#f0c060;background:rgba(240,192,96,.08);}
+
+/* BG presets */
+.bgPresetRow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.bgPreset{width:50px;height:50px;border-radius:10px;border:2px solid transparent;cursor:pointer;}
+.bgPreset.active{border-color:#4caf50;}
+
+/* Decor */
+.posEditor{position:relative;width:200px;height:290px;margin:10px auto;background:#111 center/cover no-repeat;border-radius:10px;border:1px solid #3a3a3a;overflow:hidden;touch-action:none;}
+.posEditor img{position:absolute;transform:translate(-50%,-50%);touch-action:none;}
+.decorCard{background:#1b1b1b;border-radius:10px;padding:10px;margin-bottom:12px;}
+.sizeRow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;}
+.sizeRow input[type=range]{flex:1;touch-action:pan-x;}
+.hint{font-size:12px;color:#777;margin-top:6px;}
+
+/* MQTT section */
+.mqttSec label{font-size:11px;color:#9fd3ff;display:block;margin-bottom:2px;}
+.mqttSec input{width:100%;padding:6px 8px;background:#0e0e0e;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:12px;margin-bottom:7px;}
+
+/* ══════════ MODAL ══════════ */
+.modal{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;padding:14px;}
+.modal.open{display:flex;}
+.modalBox{background:#1e1e1e;border:1px solid #333;border-radius:18px;padding:20px;width:100%;max-width:360px;max-height:92vh;overflow-y:auto;}
+.modalBox h4{margin:0 0 14px;color:#9fd3ff;font-size:16px;}
+.modalBox label{display:block;font-size:11px;color:#aaa;margin-bottom:3px;}
+.modalBox input[type=text],.modalBox input[type=password],.modalBox select{width:100%;padding:8px;background:#111;border:1px solid #3a3a3a;border-radius:8px;color:#fff;font-size:13px;margin-bottom:10px;}
+.modalBox input[type=color]{width:100%;height:38px;padding:2px;background:#111;border:1px solid #3a3a3a;border-radius:8px;margin-bottom:10px;cursor:pointer;}
+.modalBox input[type=range]{width:100%;height:26px;touch-action:pan-x;margin-bottom:10px;}
+.modalBtns{display:flex;gap:10px;margin-top:6px;}
+.modalBtns button{flex:1;padding:11px;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:bold;}
+.btn-cancel{background:#3a3a3a;color:#ccc;}
+.btn-confirm{background:#4caf50;color:#fff;}
+
+/* Preview in modal */
+.btn-preview-wrap{display:flex;align-items:center;justify-content:center;padding:12px 0 6px;}
+#btnPreview{display:inline-flex;align-items:center;justify-content:center;color:#fff;background:#444;font-size:22px;font-weight:bold;text-shadow:0 1px 4px rgba(0,0,0,.9);box-shadow:0 4px 14px rgba(0,0,0,.6);pointer-events:none;transition:all .15s;}
+
+/* Shape-mode rows in modal */
+.shapeModRow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.shapeChipM{padding:6px 12px;border:2px solid #3a3a3a;border-radius:8px;background:transparent;color:#888;font-size:12px;cursor:pointer;}
+.shapeChipM.active{border-color:#f0c060;color:#f0c060;background:rgba(240,192,96,.1);}
+.slrow{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.slrow span{font-size:12px;color:#aaa;min-width:66px;}
+.slrow input[type=range]{flex:1;}
+.slrow .slval{font-size:12px;color:#fff;min-width:34px;text-align:right;}
 </style>
 </head>
 <body oncontextmenu="return false">
-<h2>KAYRA ROBOT</h2>
-<div class="status" id="status">
-Disconnected
+
+<div id="bgLayer"><div id="decorLayer"></div></div>
+
+<div id="app">
+  <div class="topbar">
+    <h2>KAYRA ROBOT</h2>
+    <button class="gearBtn" id="openSettings">⚙</button>
+  </div>
+  <div id="status">⚡ Connecting...</div>
+  <div class="speed-box">
+    <label>Speed: <span id="speedValue">200</span> / 255</label>
+    <input type="range" id="speedSlider" min="60" max="255" value="200">
+  </div>
+  <div class="editBar" id="editBar">
+    <span>✏ Edit Mode — tap a button to configure it</span>
+    <button class="editToggle off" id="editToggleBtn">Done</button>
+  </div>
+  <div class="controls" id="controls">
+    <button class="btn btn-add" id="btnAddNew" title="Add new button">＋</button>
+  </div>
 </div>
 
-<div class="speed-box">
-  <label for="speedSlider">Tốc độ: <span id="speedValue">200</span> / 255</label>
-  <input type="range" id="speedSlider" min="60" max="255" value="200">
+<!-- ════════════ SETTINGS PANEL ════════════ -->
+<div class="overlay" id="settingsPanel">
+  <div class="panelHead">
+    <h3>⚙ Settings</h3>
+    <button class="closeBtn" id="closeSettings">✕</button>
+  </div>
+
+  <!-- MQTT -->
+  <div class="section mqttSec">
+    <h4>🔌 MQTT Connection</h4>
+    <label>Broker URL (wss://...)</label>
+    <input type="text" id="mqttUrl" placeholder="wss://host:8884/mqtt">
+    <label>Username</label>
+    <input type="text" id="mqttUser" placeholder="username">
+    <label>Password</label>
+    <input type="password" id="mqttPass" placeholder="password">
+    <label>Default Topic</label>
+    <input type="text" id="mqttTopic" placeholder="robot/cmd">
+    <button class="miniBtn primary" id="mqttSaveBtn">Save &amp; Reconnect</button>
+  </div>
+
+  <!-- Buttons -->
+  <div class="section">
+    <h4>🎮 Button Settings</h4>
+    <button class="miniBtn green" id="openEditModeBtn" style="margin-bottom:10px;">✏ Enter Edit Mode</button>
+    <p class="hint">In Edit Mode, tap any button on screen to configure it. Tap ＋ to add a new button.</p>
+    <div class="iconGrid" id="iconGrid"></div>
+  </div>
+
+  <!-- Background -->
+  <div class="section">
+    <h4>🖼 Background</h4>
+    <div class="bgPresetRow" id="bgPresetRow"></div>
+    <label class="fileBtn">Upload Image <input type="file" id="bgFileInput" accept="image/*"></label>
+    <button class="miniBtn danger" id="clearBgBtn" style="width:auto;padding:8px 14px;margin-left:8px;">Clear</button>
+  </div>
+
+  <!-- Decor -->
+  <div class="section">
+    <h4>✨ Decorations</h4>
+    <label class="fileBtn">+ Add Image <input type="file" id="decorFileInput" accept="image/*"></label>
+    <p class="hint">Drag the image inside the preview frame to reposition it. Use the slider to resize.</p>
+    <div id="decorList"></div>
+  </div>
+
+  <button class="miniBtn danger" id="resetAllBtn">🗑 Reset All (clear all customization)</button>
 </div>
 
-<div class="row">
-  <button class="btn" data-cmd="F">↑</button>
+<!-- ════════════ BUTTON EDITOR MODAL ════════════ -->
+<div class="modal" id="btnModal">
+  <div class="modalBox">
+    <h4 id="btnModalTitle">Configure Button</h4>
+
+    <!-- Live preview -->
+    <div class="btn-preview-wrap">
+      <div id="btnPreview">?</div>
+    </div>
+
+    <label>Label (emoji or text)</label>
+    <input type="text" id="mLabel" maxlength="8" placeholder="e.g. ↑ or FIRE">
+
+    <label>Press mode</label>
+    <div class="shapeModRow" id="mModeRow">
+      <button class="shapeChipM" data-val="hold">Hold (repeat)</button>
+      <button class="shapeChipM" data-val="click">Click (once)</button>
+      <button class="shapeChipM" data-val="toggle">Toggle ON/OFF</button>
+    </div>
+
+    <label>Command sent on press / ON</label>
+    <input type="text" id="mCmdOn" placeholder="e.g. F or LIGHT_ON">
+    <label>Command sent on release / OFF (optional)</label>
+    <input type="text" id="mCmdOff" placeholder="e.g. S  (leave blank if none)">
+    <label>MQTT Topic (blank = default topic)</label>
+    <input type="text" id="mTopic" placeholder="robot/cmd">
+
+    <label>Background color</label>
+    <input type="color" id="mColor" value="#444444">
+
+    <!-- Size -->
+    <label>Width</label>
+    <div class="slrow">
+      <span>Width</span>
+      <input type="range" id="mWidth" min="50" max="260" value="92">
+      <span class="slval" id="mWidthVal">92 px</span>
+    </div>
+    <div class="slrow">
+      <span>Height</span>
+      <input type="range" id="mHeight" min="50" max="260" value="92">
+      <span class="slval" id="mHeightVal">92 px</span>
+    </div>
+    <div class="slrow">
+      <span>Font size</span>
+      <input type="range" id="mFontSize" min="10" max="80" value="32">
+      <span class="slval" id="mFontSizeVal">32 px</span>
+    </div>
+
+    <!-- Shape -->
+    <label>Shape / Corner radius</label>
+    <div class="shapeModRow" id="mShapeRow">
+      <button class="shapeChipM" data-val="0">Sharp</button>
+      <button class="shapeChipM" data-val="12">Soft</button>
+      <button class="shapeChipM" data-val="20">Rounded</button>
+      <button class="shapeChipM" data-val="50%">Pill</button>
+      <button class="shapeChipM" data-val="circle">Circle</button>
+    </div>
+
+    <!-- Button image upload -->
+    <label class="fileBtn" style="margin-bottom:10px;display:block;text-align:center;">
+      📂 Upload Button Image <input type="file" id="mImgFile" accept="image/*">
+    </label>
+    <button class="miniBtn danger" id="mClearImg" style="margin-bottom:10px;">Remove Image</button>
+
+    <div class="modalBtns">
+      <button class="btn-cancel" id="btnModalCancel">Cancel</button>
+      <button class="btn-confirm" id="btnModalSave">Save</button>
+    </div>
+    <button class="miniBtn danger" id="btnModalDelete" style="margin-top:8px;display:none;">🗑 Delete This Button</button>
+  </div>
 </div>
-<div class="row">
-  <button class="btn" data-cmd="L">←</button>
-  <button class="btn stop" data-cmd="STOP">■</button>
-  <button class="btn" data-cmd="R">→</button>
-</div>
-<div class="row">
-  <button class="btn" data-cmd="B">↓</button>
-</div>
+
 <script>
-const client = mqtt.connect(
-'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',
-{
-    username:'Kayra',
-    password:'KayraandHona24/6/2025'
-});
-client.on('connect',()=>{
-    document.getElementById('status').innerHTML = 'Connected';
-});
-client.on('error',()=>{
-    document.getElementById('status').innerHTML = 'Error';
-});
+/* ═══════════════════════════════════════════════════
+   SVG PRESET ICONS
+═══════════════════════════════════════════════════ */
+function svgIcon(inner,bg){
+  const s=`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="20" fill="${bg}"/>${inner}</svg>`;
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(s);
+}
+const ARROW=r=>`<g transform="rotate(${r} 50 50)"><path d="M50 18L76 56H59V82H41V56H24Z" fill="white"/></g>`;
+const PRESETS={
+  F:   [svgIcon(ARROW(0),'#333'),   svgIcon(ARROW(0),'#1565c0')],
+  B:   [svgIcon(ARROW(180),'#333'), svgIcon(ARROW(180),'#1565c0')],
+  L:   [svgIcon(ARROW(270),'#333'), svgIcon(ARROW(270),'#1565c0')],
+  R:   [svgIcon(ARROW(90),'#333'),  svgIcon(ARROW(90),'#1565c0')],
+  STOP:[svgIcon('<rect x="28" y="28" width="44" height="44" rx="5" fill="white"/>','#d32f2f'),
+        svgIcon('<circle cx="50" cy="50" r="25" fill="none" stroke="white" stroke-width="8"/><line x1="34" y1="34" x2="66" y2="66" stroke="white" stroke-width="8"/>','#b71c1c')],
+  SHOOT:[svgIcon('<circle cx="50" cy="50" r="10" fill="white"/><line x1="50" y1="6" x2="50" y2="26" stroke="white" stroke-width="6"/><line x1="50" y1="74" x2="50" y2="94" stroke="white" stroke-width="6"/><line x1="6" y1="50" x2="26" y2="50" stroke="white" stroke-width="6"/><line x1="74" y1="50" x2="94" y2="50" stroke="white" stroke-width="6"/>','#ff9800'),
+          svgIcon('<path d="M30 70L70 30M40 30L70 30L70 60" stroke="white" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>','#e65100')]
+};
+const BG_PRESETS=['#1e1e1e','#0d1b2a','#142a14','#2a1414','#101820','#1a1028'];
 
-// ---- Tốc độ ----
-let speed = 200;
-const speedSlider = document.getElementById('speedSlider');
-const speedValue = document.getElementById('speedValue');
-
-speedSlider.addEventListener('input', ()=>{
-    speed = parseInt(speedSlider.value, 10);
-    speedValue.textContent = speed;
-    // Nếu đang giữ nút di chuyển, gửi ngay tốc độ mới thay vì chờ heartbeat
-    if(currentDir) send(currentDir);
-});
-
-function send(cmd){
-    client.publish('robot/cmd', JSON.stringify({cmd:cmd, speed:speed}));
-    console.log(cmd, speed);
+/* ═══════════════════════════════════════════════════
+   DEFAULT BUTTON DEFINITIONS
+═══════════════════════════════════════════════════ */
+function makeDefaultButtons(){
+  return [
+    {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:0},
+    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:1},
+    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, row:1},
+    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:1},
+    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:2},
+    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, row:3},
+  ];
 }
 
-// ---- Giữ nút = gửi lệnh lặp lại (heartbeat) ----
-// ESP32 có watchdog: nếu quá ~600ms không nhận lệnh mới sẽ tự dừng động cơ.
-// Vì vậy khi giữ nút phải gửi lại lệnh đều đặn, không chỉ gửi 1 lần lúc chạm.
-let currentDir = null;
-let holdTimer = null;
-const HEARTBEAT_MS = 200; // phải nhỏ hơn nhiều so với watchdog timeout bên ESP32
-
-function startHold(cmd){
-    currentDir = cmd;
-    send(cmd);                 // gửi ngay lập tức, không chờ tick đầu tiên
-    clearInterval(holdTimer);
-    holdTimer = setInterval(()=> send(cmd), HEARTBEAT_MS);
+/* ═══════════════════════════════════════════════════
+   STORAGE
+═══════════════════════════════════════════════════ */
+const SK='kayraSettings_v4';
+function defaultSettings(){
+  return {
+    buttons: makeDefaultButtons(),
+    buttonImages:{},
+    background:{type:'color',value:'#1e1e1e'},
+    decorImages:[],
+    mqtt:{url:'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',user:'Kayra',pass:'KayraandHona24/6/2025'},
+    defaultTopic:'robot/cmd'
+  };
 }
+function loadSettings(){
+  try{
+    const raw=localStorage.getItem(SK);
+    if(raw){
+      const s=JSON.parse(raw);
+      const d=defaultSettings();
+      if(!s.mqtt) s.mqtt=d.mqtt;
+      if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
+      if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
+      // backfill missing size fields
+      s.buttons.forEach(b=>{
+        if(!b.w) b.w=92; if(!b.h) b.h=92;
+        if(b.r===undefined) b.r=20;
+        if(!b.fs) b.fs=36; if(!b.row&&b.row!==0) b.row=0;
+      });
+      return s;
+    }
+  }catch(e){}
+  return defaultSettings();
+}
+function saveSettings(){
+  try{ localStorage.setItem(SK,JSON.stringify(settings)); }
+  catch(e){ alert('Save failed — localStorage may be full.'); }
+}
+let settings=loadSettings();
 
+/* ═══════════════════════════════════════════════════
+   MQTT
+═══════════════════════════════════════════════════ */
+let mqttClient=null, speed=200;
+
+function connectMQTT(){
+  if(mqttClient){ try{mqttClient.end(true);}catch(e){} }
+  const {url,user,pass}=settings.mqtt;
+  document.getElementById('status').textContent='⚡ Connecting...';
+  try{
+    mqttClient=mqtt.connect(url,{username:user,password:pass,reconnectPeriod:4000});
+    mqttClient.on('connect',()=>{document.getElementById('status').textContent='✅ Connected';});
+    mqttClient.on('error',  ()=>{document.getElementById('status').textContent='❌ Connection error';});
+    mqttClient.on('offline',()=>{document.getElementById('status').textContent='🔌 Disconnected';});
+  }catch(e){ document.getElementById('status').textContent='❌ Invalid URL'; }
+}
+connectMQTT();
+
+function mqttSend(topic,payload){
+  if(!mqttClient||!mqttClient.connected) return;
+  mqttClient.publish(topic||settings.defaultTopic, payload);
+}
+function buildPayload(b){ return JSON.stringify({cmd:b.cmdOn, speed}); }
+function buildPayloadOff(b){ return b.cmdOff ? JSON.stringify({cmd:b.cmdOff, speed}) : null; }
+
+document.getElementById('speedSlider').addEventListener('input',e=>{
+  speed=+e.target.value;
+  document.getElementById('speedValue').textContent=speed;
+});
+
+/* ═══════════════════════════════════════════════════
+   HOLD SYSTEM
+═══════════════════════════════════════════════════ */
+let holdBtn=null, holdTimer=null;
+const HEARTBEAT=200;
+function startHold(b){
+  holdBtn=b; mqttSend(b.topic||settings.defaultTopic, buildPayload(b));
+  clearInterval(holdTimer);
+  holdTimer=setInterval(()=>mqttSend(b.topic||settings.defaultTopic, buildPayload(b)), HEARTBEAT);
+}
 function stopHold(){
-    clearInterval(holdTimer);
-    holdTimer = null;
-    currentDir = null;
-    send('S');
+  clearInterval(holdTimer); holdTimer=null;
+  if(holdBtn){ const p=buildPayloadOff(holdBtn); if(p) mqttSend(holdBtn.topic||settings.defaultTopic,p); holdBtn=null; }
+}
+const toggleState={};
+
+/* ═══════════════════════════════════════════════════
+   RENDER BUTTONS
+═══════════════════════════════════════════════════ */
+let editMode=false;
+
+function btnRadius(b){
+  if(b.r==='circle') return Math.min(b.w,b.h)/2+'px';
+  if(String(b.r).endsWith('%')) return b.r;
+  return b.r+'px';
 }
 
-// Gắn sự kiện bằng JS thay vì onmousedown/ontouchstart trong HTML,
-// dùng { passive:false } để có thể preventDefault() -> chặn long-press menu, chọn text, kéo trang.
-document.querySelectorAll('.btn').forEach(btn=>{
-    const cmd = btn.dataset.cmd;
+function renderButtons(){
+  const ctrl=document.getElementById('controls');
+  Array.from(ctrl.querySelectorAll('.btn:not(.btn-add)')).forEach(e=>e.remove());
+  Array.from(ctrl.querySelectorAll('.btn-row')).forEach(e=>e.remove());
+  const add=document.getElementById('btnAddNew');
 
-    if(cmd === 'STOP'){
-        btn.addEventListener('click', e=>{
-            e.preventDefault();
-            stopHold();
-        });
-        return;
+  const rows={};
+  settings.buttons.forEach(b=>{ (rows[b.row]=rows[b.row]||[]).push(b); });
+
+  Object.keys(rows).sort((a,c)=>+a-+c).forEach(ri=>{
+    const rd=document.createElement('div'); rd.className='btn-row';
+    rows[ri].forEach(b=>rd.appendChild(makeBtnEl(b)));
+    ctrl.insertBefore(rd,add);
+  });
+}
+
+function makeBtnEl(b){
+  const el=document.createElement('button');
+  el.className='btn'; el.dataset.id=b.id;
+  el.style.cssText=`width:${b.w}px;height:${b.h}px;background-color:${b.color};border-radius:${btnRadius(b)};font-size:${b.fs}px;`;
+  const img=settings.buttonImages[b.id];
+  if(img){ el.style.backgroundImage=`url(${img})`; el.classList.add('has-img'); }
+  if(toggleState[b.id]) el.classList.add('toggled-on');
+
+  const lbl=document.createElement('span'); lbl.className='lbl'; lbl.textContent=b.label;
+  el.appendChild(lbl);
+  const badge=document.createElement('span'); badge.className='btn-badge';
+  badge.textContent=b.mode==='hold'?'HOLD':b.mode==='toggle'?'TGL':'CLK';
+  el.appendChild(badge);
+
+  attachEvents(el,b);
+  return el;
+}
+
+function attachEvents(el,b){
+  const onPress=e=>{
+    e.preventDefault();
+    if(editMode){ openBtnModal(b); return; }
+    if(b.mode==='click'){
+      mqttSend(b.topic||settings.defaultTopic, buildPayload(b));
+      el.classList.add('active-press');
+      setTimeout(()=>el.classList.remove('active-press'),140);
+    } else if(b.mode==='hold'){
+      startHold(b); el.classList.add('active-press');
+    } else {
+      toggleState[b.id]=!toggleState[b.id];
+      if(toggleState[b.id]){ mqttSend(b.topic||settings.defaultTopic,buildPayload(b)); el.classList.add('toggled-on','active-press'); }
+      else { const p=buildPayloadOff(b); if(p) mqttSend(b.topic||settings.defaultTopic,p); el.classList.remove('toggled-on','active-press'); }
+    }
+  };
+  const onRelease=e=>{
+    e.preventDefault();
+    if(editMode) return;
+    if(b.mode==='hold'){ stopHold(); el.classList.remove('active-press'); }
+  };
+  el.addEventListener('touchstart',onPress,{passive:false});
+  el.addEventListener('touchend',  onRelease,{passive:false});
+  el.addEventListener('touchcancel',onRelease,{passive:false});
+  el.addEventListener('mousedown', onPress);
+  el.addEventListener('mouseup',   onRelease);
+  el.addEventListener('mouseleave',onRelease);
+}
+
+/* ═══════════════════════════════════════════════════
+   EDIT MODE
+═══════════════════════════════════════════════════ */
+function setEditMode(on){
+  editMode=on;
+  const ctrl=document.getElementById('controls');
+  const bar=document.getElementById('editBar');
+  const tb=document.getElementById('editToggleBtn');
+  if(on){ ctrl.classList.add('edit-mode'); bar.classList.add('open'); tb.textContent='Done'; tb.className='editToggle on'; }
+  else  { ctrl.classList.remove('edit-mode'); bar.classList.remove('open'); tb.textContent='Off'; tb.className='editToggle off'; }
+}
+document.getElementById('editToggleBtn').addEventListener('click',()=>setEditMode(!editMode));
+document.getElementById('openEditModeBtn').addEventListener('click',()=>{
+  document.getElementById('settingsPanel').classList.remove('open');
+  setEditMode(true);
+});
+document.getElementById('btnAddNew').addEventListener('click',()=>{ openBtnModal(null); });
+
+/* ═══════════════════════════════════════════════════
+   BUTTON MODAL
+═══════════════════════════════════════════════════ */
+let modalTarget=null; // null = new button
+
+/* --- live preview --- */
+function updatePreview(){
+  const p=document.getElementById('btnPreview');
+  const w=+document.getElementById('mWidth').value;
+  const h=+document.getElementById('mHeight').value;
+  const fs=+document.getElementById('mFontSize').value;
+  const color=document.getElementById('mColor').value;
+  const label=document.getElementById('mLabel').value||'?';
+
+  // shape
+  const activeShape=document.querySelector('#mShapeRow .shapeChipM.active');
+  let r=20;
+  if(activeShape){
+    const v=activeShape.dataset.val;
+    if(v==='circle') r=Math.min(w,h)/2;
+    else if(v.endsWith('%')) r=v;
+    else r=+v;
+  }
+
+  const img=modalTarget ? settings.buttonImages[modalTarget.id] : null;
+  p.style.cssText=`width:${Math.min(w,160)}px;height:${Math.min(h,160)}px;font-size:${Math.min(fs,52)}px;background-color:${color};border-radius:${typeof r==='number'?r+'px':r};`;
+  if(img){ p.style.backgroundImage=`url(${img})`; p.textContent=''; }
+  else   { p.style.backgroundImage=''; p.textContent=label; }
+}
+
+function syncSlider(id,valId,unit,cb){
+  const el=document.getElementById(id);
+  const vEl=document.getElementById(valId);
+  el.addEventListener('input',()=>{ vEl.textContent=el.value+unit; if(cb)cb(); updatePreview(); });
+}
+syncSlider('mWidth','mWidthVal',' px');
+syncSlider('mHeight','mHeightVal',' px');
+syncSlider('mFontSize','mFontSizeVal',' px');
+document.getElementById('mColor').addEventListener('input',updatePreview);
+document.getElementById('mLabel').addEventListener('input',updatePreview);
+
+// Mode chips
+document.querySelectorAll('#mModeRow .shapeChipM').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#mModeRow .shapeChipM').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+  });
+});
+// Shape chips
+document.querySelectorAll('#mShapeRow .shapeChipM').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#mShapeRow .shapeChipM').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+    updatePreview();
+  });
+});
+
+// Image upload in modal
+document.getElementById('mImgFile').addEventListener('change',async e=>{
+  if(!e.target.files[0]) return;
+  const url=await fileToDataUrl(e.target.files[0]);
+  if(modalTarget){
+    settings.buttonImages[modalTarget.id]=url;
+    // don't save yet, save on confirm
+  } else {
+    // store temporarily for new btn
+    document.getElementById('mImgFile')._tempUrl=url;
+  }
+  updatePreview();
+  const p=document.getElementById('btnPreview');
+  p.style.backgroundImage=`url(${url})`; p.textContent='';
+});
+document.getElementById('mClearImg').addEventListener('click',()=>{
+  document.getElementById('mImgFile')._tempUrl=null;
+  if(modalTarget) delete settings.buttonImages[modalTarget.id];
+  updatePreview();
+});
+
+function setChip(row,val){
+  document.querySelectorAll(`#${row} .shapeChipM`).forEach(c=>{
+    c.classList.toggle('active', c.dataset.val===String(val));
+  });
+}
+
+function openBtnModal(b){
+  modalTarget=b;
+  const isNew=!b;
+  document.getElementById('btnModalTitle').textContent=isNew?'Add New Button':'Configure Button';
+  document.getElementById('btnModalDelete').style.display=(!isNew&&b.id.startsWith('custom_'))?'block':'none';
+
+  // populate fields
+  document.getElementById('mLabel').value   = b ? b.label   : '';
+  document.getElementById('mCmdOn').value   = b ? b.cmdOn   : '';
+  document.getElementById('mCmdOff').value  = b ? (b.cmdOff||'') : '';
+  document.getElementById('mTopic').value   = b ? (b.topic||'')  : '';
+  document.getElementById('mColor').value   = b ? b.color   : '#444444';
+  const w=b?b.w:92, h=b?b.h:92, fs=b?b.fs:32;
+  document.getElementById('mWidth').value   = w; document.getElementById('mWidthVal').textContent=w+' px';
+  document.getElementById('mHeight').value  = h; document.getElementById('mHeightVal').textContent=h+' px';
+  document.getElementById('mFontSize').value=fs; document.getElementById('mFontSizeVal').textContent=fs+' px';
+
+  setChip('mModeRow',  b ? b.mode : 'click');
+  const rv=b?(b.r==='circle'?'circle':String(b.r)):String(20);
+  setChip('mShapeRow', rv);
+
+  document.getElementById('mImgFile')._tempUrl=null;
+  document.getElementById('mImgFile').value='';
+
+  updatePreview();
+  document.getElementById('btnModal').classList.add('open');
+}
+
+document.getElementById('btnModalCancel').addEventListener('click',()=>{
+  document.getElementById('btnModal').classList.remove('open');
+  modalTarget=null;
+});
+
+document.getElementById('btnModalDelete').addEventListener('click',()=>{
+  if(!modalTarget) return;
+  if(confirm('Delete button "'+modalTarget.label+'"?')){
+    settings.buttons=settings.buttons.filter(b=>b.id!==modalTarget.id);
+    delete settings.buttonImages[modalTarget.id];
+    saveSettings(); renderButtons(); buildIconGrid();
+    document.getElementById('btnModal').classList.remove('open');
+    modalTarget=null;
+  }
+});
+
+document.getElementById('btnModalSave').addEventListener('click',()=>{
+  const label =document.getElementById('mLabel').value.trim()||'?';
+  const cmdOn  =document.getElementById('mCmdOn').value.trim();
+  const cmdOff =document.getElementById('mCmdOff').value.trim();
+  const topic  =document.getElementById('mTopic').value.trim();
+  const color  =document.getElementById('mColor').value;
+  const w      =+document.getElementById('mWidth').value;
+  const h      =+document.getElementById('mHeight').value;
+  const fs     =+document.getElementById('mFontSize').value;
+  const modeEl =document.querySelector('#mModeRow .shapeChipM.active');
+  const mode   =modeEl ? modeEl.dataset.val : 'click';
+  const shpEl  =document.querySelector('#mShapeRow .shapeChipM.active');
+  let r=20;
+  if(shpEl){
+    const v=shpEl.dataset.val;
+    r=(v==='circle')?'circle':v.endsWith('%')?v:+v;
+  }
+  const tempImg=document.getElementById('mImgFile')._tempUrl;
+
+  if(modalTarget){
+    // update existing
+    Object.assign(modalTarget,{label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r});
+    if(tempImg) settings.buttonImages[modalTarget.id]=tempImg;
+  } else {
+    // new button
+    const id='custom_'+Date.now();
+    const maxRow=settings.buttons.reduce((m,b)=>Math.max(m,b.row),0);
+    const nb={id,label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,row:maxRow+1};
+    settings.buttons.push(nb);
+    if(tempImg) settings.buttonImages[id]=tempImg;
+  }
+  saveSettings(); renderButtons(); buildIconGrid();
+  document.getElementById('btnModal').classList.remove('open');
+  modalTarget=null;
+});
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS PANEL
+═══════════════════════════════════════════════════ */
+document.getElementById('openSettings').addEventListener('click',()=>{
+  stopHold();
+  document.getElementById('mqttUrl').value  =settings.mqtt.url;
+  document.getElementById('mqttUser').value =settings.mqtt.user;
+  document.getElementById('mqttPass').value =settings.mqtt.pass;
+  document.getElementById('mqttTopic').value=settings.defaultTopic;
+  document.getElementById('settingsPanel').classList.add('open');
+});
+document.getElementById('closeSettings').addEventListener('click',()=>{
+  document.getElementById('settingsPanel').classList.remove('open');
+});
+document.getElementById('mqttSaveBtn').addEventListener('click',()=>{
+  settings.mqtt.url  =document.getElementById('mqttUrl').value.trim();
+  settings.mqtt.user =document.getElementById('mqttUser').value.trim();
+  settings.mqtt.pass =document.getElementById('mqttPass').value.trim();
+  settings.defaultTopic=document.getElementById('mqttTopic').value.trim()||'robot/cmd';
+  saveSettings(); connectMQTT();
+  alert('Saved! Reconnecting...');
+});
+
+/* ── Icon grid ── */
+function fileToDataUrl(file){
+  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+}
+
+function buildIconGrid(){
+  const grid=document.getElementById('iconGrid');
+  grid.innerHTML='';
+  settings.buttons.forEach(b=>{
+    const card=document.createElement('div'); card.className='iconCard';
+    const hdr=document.createElement('div'); hdr.className='iconCard-header';
+    const nm=document.createElement('span'); nm.className='iconCard-name'; nm.textContent=b.label+' ('+b.id+')';
+    hdr.appendChild(nm);
+    if(b.id.startsWith('custom_')){
+      const del=document.createElement('button'); del.className='iconCard-del'; del.textContent='Delete';
+      del.addEventListener('click',()=>{
+        if(confirm('Delete button "'+b.label+'"?')){
+          settings.buttons=settings.buttons.filter(x=>x.id!==b.id);
+          delete settings.buttonImages[b.id];
+          saveSettings(); renderButtons(); buildIconGrid();
+        }
+      });
+      hdr.appendChild(del);
+    }
+    card.appendChild(hdr);
+
+    const prev=document.createElement('div'); prev.className='iconPreview';
+    prev.style.backgroundColor=b.color||'#333';
+    prev.style.borderRadius=btnRadius(b);
+    const curImg=settings.buttonImages[b.id];
+    if(curImg) prev.style.backgroundImage=`url(${curImg})`;
+    else prev.textContent=b.label;
+    card.appendChild(prev);
+
+    // Presets
+    if(PRESETS[b.id]){
+      const pr=document.createElement('div'); pr.className='presetRow';
+      PRESETS[b.id].forEach(src=>{
+        const t=document.createElement('div'); t.className='presetThumb'+(curImg===src?' active':'');
+        t.style.backgroundImage=`url(${src})`;
+        t.addEventListener('click',()=>{settings.buttonImages[b.id]=src;saveSettings();applyButtonImages();buildIconGrid();});
+        pr.appendChild(t);
+      });
+      card.appendChild(pr);
     }
 
-    const start = e=>{
-        e.preventDefault();
-        startHold(cmd);
-    };
-    const end = e=>{
-        e.preventDefault();
-        stopHold();
-    };
+    // Upload image
+    const fl=document.createElement('label'); fl.className='fileBtn'; fl.style.cssText='font-size:12px;padding:5px 8px;';
+    fl.textContent='📂 Upload Image';
+    const fi=document.createElement('input'); fi.type='file'; fi.accept='image/*';
+    fi.addEventListener('change',async()=>{
+      if(!fi.files[0]) return;
+      const url=await fileToDataUrl(fi.files[0]);
+      settings.buttonImages[b.id]=url; saveSettings(); applyButtonImages(); buildIconGrid();
+    });
+    fl.appendChild(fi); card.appendChild(fl);
 
-    btn.addEventListener('touchstart', start, {passive:false});
-    btn.addEventListener('touchend', end, {passive:false});
-    btn.addEventListener('touchcancel', end, {passive:false}); // quan trọng: khi hệ thống "nuốt" touch (ví dụ hộp thoại bật lên), vẫn nhận lệnh dừng
+    // Reset image
+    const rst=document.createElement('button'); rst.className='miniBtn'; rst.textContent='Reset Image';
+    rst.addEventListener('click',()=>{delete settings.buttonImages[b.id];saveSettings();applyButtonImages();buildIconGrid();});
+    card.appendChild(rst);
 
-    btn.addEventListener('mousedown', start);
-    btn.addEventListener('mouseup', end);
-    btn.addEventListener('mouseleave', end); // nếu rê chuột ra ngoài nút mà vẫn giữ, robot không bị kẹt
+    // Configure button (opens modal)
+    const cfg=document.createElement('button'); cfg.className='miniBtn primary'; cfg.textContent='✏ Configure';
+    cfg.addEventListener('click',()=>{
+      document.getElementById('settingsPanel').classList.remove('open');
+      openBtnModal(b);
+    });
+    card.appendChild(cfg);
+
+    // Mode quick-switch
+    const cmdSec=document.createElement('div'); cmdSec.className='cmdSec';
+    const mr=document.createElement('div'); mr.className='modeRow';
+    ['hold','click','toggle'].forEach(m=>{
+      const mb=document.createElement('button');
+      mb.className='modeBtn'+(b.mode===m?' active':'');
+      mb.textContent=m==='hold'?'Hold':m==='click'?'Click':'Toggle';
+      mb.addEventListener('click',()=>{ b.mode=m; saveSettings(); renderButtons(); buildIconGrid(); });
+      mr.appendChild(mb);
+    });
+    cmdSec.appendChild(mr);
+    addLabeledInput(cmdSec,'ON Command:',b.cmdOn||'',v=>{b.cmdOn=v;saveSettings();});
+    addLabeledInput(cmdSec,'OFF Command:',b.cmdOff||'',v=>{b.cmdOff=v;saveSettings();});
+    addLabeledInput(cmdSec,'Topic:',b.topic||'',v=>{b.topic=v;saveSettings();});
+    card.appendChild(cmdSec);
+
+    grid.appendChild(card);
+  });
+}
+
+function addLabeledInput(parent,lbl,val,onChange){
+  const l=document.createElement('span'); l.className='row-label'; l.textContent=lbl;
+  const i=document.createElement('input'); i.type='text'; i.value=val;
+  i.addEventListener('change',()=>onChange(i.value.trim()));
+  parent.appendChild(l); parent.appendChild(i);
+}
+
+/* ── Background ── */
+function buildBgPresets(){
+  const row=document.getElementById('bgPresetRow'); row.innerHTML='';
+  BG_PRESETS.forEach(c=>{
+    const sw=document.createElement('div');
+    sw.className='bgPreset'+(settings.background.type==='color'&&settings.background.value===c?' active':'');
+    sw.style.background=c;
+    sw.addEventListener('click',()=>{settings.background={type:'color',value:c};saveSettings();applyBackground();buildBgPresets();});
+    row.appendChild(sw);
+  });
+}
+document.getElementById('bgFileInput').addEventListener('change',async e=>{
+  if(e.target.files[0]){
+    const url=await fileToDataUrl(e.target.files[0]);
+    settings.background={type:'image',value:url};saveSettings();applyBackground();buildBgPresets();
+  }
+});
+document.getElementById('clearBgBtn').addEventListener('click',()=>{
+  settings.background={type:'color',value:'#1e1e1e'};saveSettings();applyBackground();buildBgPresets();
 });
 
-// Lưới an toàn cuối cùng: nếu vì lý do gì đó tay rời khỏi màn hình mà
-// không bắn đúng sự kiện touchend trên nút, vẫn dừng heartbeat + gửi STOP.
-document.addEventListener('touchend', stopHold, {passive:true});
-window.addEventListener('blur', stopHold);
+/* ── Decorations ── */
+let decorIdCtr=Date.now();
+document.getElementById('decorFileInput').addEventListener('change',async e=>{
+  if(e.target.files[0]){
+    const url=await fileToDataUrl(e.target.files[0]);
+    settings.decorImages.push({id:'d'+decorIdCtr++,src:url,x:50,y:50,size:25});
+    saveSettings();applyDecorLayer();buildDecorList(); e.target.value='';
+  }
+});
+function buildDecorList(){
+  const list=document.getElementById('decorList'); list.innerHTML='';
+  if(!settings.decorImages.length){
+    const p=document.createElement('p'); p.className='hint'; p.textContent='No decorations yet.'; list.appendChild(p); return;
+  }
+  settings.decorImages.forEach(d=>{
+    const card=document.createElement('div'); card.className='decorCard';
+    const ed=document.createElement('div'); ed.className='posEditor';
+    if(settings.background.type==='image') ed.style.backgroundImage=`url(${settings.background.value})`;
+    else ed.style.background=settings.background.value;
+    const img=document.createElement('img'); img.src=d.src;
+    img.style.left=d.x+'%'; img.style.top=d.y+'%'; img.style.width=(d.size*2)+'px';
+    ed.appendChild(img);
+    let drag=false;
+    img.addEventListener('pointerdown',e=>{drag=true;img.setPointerCapture(e.pointerId);});
+    img.addEventListener('pointermove',e=>{
+      if(!drag) return;
+      const rc=ed.getBoundingClientRect();
+      d.x=Math.round(Math.max(0,Math.min(100,(e.clientX-rc.left)/rc.width*100)));
+      d.y=Math.round(Math.max(0,Math.min(100,(e.clientY-rc.top)/rc.height*100)));
+      img.style.left=d.x+'%'; img.style.top=d.y+'%'; applyDecorLayer();
+    });
+    img.addEventListener('pointerup',()=>{drag=false;saveSettings();});
+    const sr=document.createElement('div'); sr.className='sizeRow';
+    const sl=document.createElement('span'); sl.textContent='Size: ';
+    const ss=document.createElement('input'); ss.type='range'; ss.min='5'; ss.max='60'; ss.value=d.size; ss.style.touchAction='pan-x';
+    ss.addEventListener('input',()=>{d.size=+ss.value;img.style.width=(d.size*2)+'px';applyDecorLayer();});
+    ss.addEventListener('change',saveSettings);
+    const db=document.createElement('button'); db.className='miniBtn danger'; db.style.cssText='width:auto;padding:4px 10px;';
+    db.textContent='Remove';
+    db.addEventListener('click',()=>{settings.decorImages=settings.decorImages.filter(x=>x.id!==d.id);saveSettings();applyDecorLayer();buildDecorList();});
+    sr.appendChild(sl); sr.appendChild(ss); sr.appendChild(db);
+    card.appendChild(ed); card.appendChild(sr); list.appendChild(card);
+  });
+}
+
+/* ── Apply ── */
+function applyButtonImages(){
+  document.querySelectorAll('.btn:not(.btn-add)').forEach(el=>{
+    const id=el.dataset.id; if(!id) return;
+    const img=settings.buttonImages[id];
+    if(img){el.style.backgroundImage=`url(${img})`;el.classList.add('has-img');}
+    else   {el.style.backgroundImage='';el.classList.remove('has-img');}
+  });
+}
+function applyBackground(){
+  const bg=settings.background, layer=document.getElementById('bgLayer');
+  if(bg.type==='image'&&bg.value){layer.style.backgroundImage=`url(${bg.value})`;layer.style.backgroundColor='#1e1e1e';}
+  else{layer.style.backgroundImage='';layer.style.backgroundColor=bg.value||'#1e1e1e';}
+}
+function applyDecorLayer(){
+  const layer=document.getElementById('decorLayer'); layer.innerHTML='';
+  settings.decorImages.forEach(d=>{
+    const img=document.createElement('img'); img.src=d.src;
+    img.style.left=d.x+'%'; img.style.top=d.y+'%'; img.style.width=d.size+'vw';
+    layer.appendChild(img);
+  });
+}
+
+document.getElementById('resetAllBtn').addEventListener('click',()=>{
+  if(confirm('Reset ALL customization? This cannot be undone.')){
+    settings=defaultSettings(); saveSettings(); renderButtons(); applyBackground(); applyDecorLayer();
+    buildIconGrid(); buildBgPresets(); buildDecorList();
+  }
+});
+
+/* ── Global safety ── */
+document.addEventListener('touchend',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
+window.addEventListener('blur',stopHold);
+
+/* ── Boot ── */
+applyBackground(); applyDecorLayer();
+renderButtons();
+buildIconGrid();
+buildBgPresets();
+buildDecorList();
 </script>
 </body>
 </html>
