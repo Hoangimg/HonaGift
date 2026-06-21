@@ -109,11 +109,38 @@ input[type=file]{display:none;}
 
 /* Decor */
 .posEditor{position:relative;width:200px;height:290px;margin:10px auto;background:#111 center/cover no-repeat;border-radius:10px;border:1px solid #3a3a3a;overflow:hidden;touch-action:none;}
-.posEditor img{position:absolute;transform:translate(-50%,-50%);touch-action:none;}
+.posEditor .decorWrap{position:absolute;touch-action:none;}
+.posEditor .decorWrap img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);touch-action:none;pointer-events:none;width:100%;height:100%;}
 .decorCard{background:#1b1b1b;border-radius:10px;padding:10px;margin-bottom:12px;}
 .sizeRow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;}
+.sizeRow span{min-width:46px;color:#aaa;}
 .sizeRow input[type=range]{flex:1;touch-action:pan-x;}
+.sizeRow .val{min-width:34px;text-align:right;color:#fff;}
 .hint{font-size:12px;color:#777;margin-top:6px;}
+
+/* Rotate handle (shared look for decor + button preview) */
+.rotHandle{position:absolute;width:22px;height:22px;border-radius:50%;background:#f0c060;border:2px solid #1e1e1e;box-shadow:0 2px 6px rgba(0,0,0,.6);touch-action:none;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:11px;color:#1e1e1e;z-index:5;}
+.rotStem{position:absolute;width:2px;background:rgba(240,192,96,.7);transform-origin:top center;pointer-events:none;z-index:4;}
+.resizeHandle{position:absolute;width:18px;height:18px;border-radius:4px;background:#4caf50;border:2px solid #1e1e1e;box-shadow:0 2px 6px rgba(0,0,0,.6);touch-action:none;cursor:nwse-resize;z-index:5;right:-9px;bottom:-9px;}
+
+/* Animation chips for decor */
+.animChipRow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.animChip{padding:5px 10px;border:2px solid #3a3a3a;border-radius:8px;background:transparent;color:#888;font-size:11px;cursor:pointer;}
+.animChip.active{border-color:#9c7dff;color:#9c7dff;background:rgba(156,125,255,.1);}
+.animSpeedRow{display:none;align-items:center;gap:8px;margin-top:6px;font-size:12px;}
+.animSpeedRow.show{display:flex;}
+.animSpeedRow span{min-width:46px;color:#aaa;}
+.animSpeedRow input[type=range]{flex:1;touch-action:pan-x;}
+.animSpeedRow .val{min-width:34px;text-align:right;color:#fff;}
+
+/* Decor loop animations (applied on the live #decorLayer, not the editor preview) */
+@keyframes decorFloat{0%,100%{margin-top:0;}50%{margin-top:-14px;}}
+@keyframes decorPulse{0%,100%{transform:translate(-50%,-50%) rotate(var(--rot,0deg)) scale(1);}50%{transform:translate(-50%,-50%) rotate(var(--rot,0deg)) scale(1.18);}}
+@keyframes decorSpin{from{transform:translate(-50%,-50%) rotate(var(--rot,0deg));}to{transform:translate(-50%,-50%) rotate(calc(var(--rot,0deg) + 360deg));}}
+.decorAnim-float{animation-name:decorFloat;animation-timing-function:ease-in-out;animation-iteration-count:infinite;}
+.decorAnim-pulse{animation-name:decorPulse;animation-timing-function:ease-in-out;animation-iteration-count:infinite;}
+.decorAnim-spin{animation-name:decorSpin;animation-timing-function:linear;animation-iteration-count:infinite;}
+.decorAnim-orbit{animation-name:none;} /* orbit handled via JS rAF, not CSS keyframes */
 
 /* MQTT section */
 .mqttSec label{font-size:11px;color:#9fd3ff;display:block;margin-bottom:2px;}
@@ -134,8 +161,20 @@ input[type=file]{display:none;}
 .btn-confirm{background:#4caf50;color:#fff;}
 
 /* Preview in modal */
-.btn-preview-wrap{display:flex;align-items:center;justify-content:center;padding:12px 0 6px;}
-#btnPreview{display:inline-flex;align-items:center;justify-content:center;color:#fff;background:#444;font-size:22px;font-weight:bold;text-shadow:0 1px 4px rgba(0,0,0,.9);box-shadow:0 4px 14px rgba(0,0,0,.6);pointer-events:none;transition:all .15s;}
+.btn-preview-wrap{display:flex;align-items:center;justify-content:center;padding:12px 0 6px;position:relative;}
+.btn-preview-stage{position:relative;display:inline-block;}
+#btnPreview{display:inline-flex;align-items:center;justify-content:center;color:#fff;background:#444;font-size:22px;font-weight:bold;text-shadow:0 1px 4px rgba(0,0,0,.9);box-shadow:0 4px 14px rgba(0,0,0,.6);pointer-events:none;transition:background .15s;}
+
+/* Sound section in icon card */
+.soundSec{margin-top:8px;border-top:1px solid #2e2e2e;padding-top:8px;}
+.soundSec .row-label{font-size:10px;color:#a0ffb0;margin-bottom:4px;display:block;}
+.soundChipRow{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;}
+.soundChip{padding:5px 8px;border:2px solid #3a3a3a;border-radius:7px;background:transparent;color:#888;font-size:10px;cursor:pointer;}
+.soundChip.active{border-color:#a0ffb0;color:#a0ffb0;background:rgba(160,255,176,.08);}
+.soundRow2{display:flex;gap:5px;align-items:center;}
+.soundRow2 .fileBtn{margin:0;font-size:10px;padding:5px 8px;}
+.soundTestBtn{border:none;background:#2e2e2e;color:#a0ffb0;border-radius:7px;font-size:13px;padding:5px 9px;cursor:pointer;}
+.soundClearBtn{border:none;background:#3a2020;color:#ff9a9a;border-radius:7px;font-size:10px;padding:5px 8px;cursor:pointer;}
 
 /* Shape-mode rows in modal */
 .shapeModRow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
@@ -225,7 +264,9 @@ input[type=file]{display:none;}
 
     <!-- Live preview -->
     <div class="btn-preview-wrap">
-      <div id="btnPreview">?</div>
+      <div class="btn-preview-stage" id="btnPreviewStage">
+        <div id="btnPreview">?</div>
+      </div>
     </div>
 
     <label>Label (emoji or text)</label>
@@ -276,11 +317,37 @@ input[type=file]{display:none;}
       <button class="shapeChipM" data-val="circle">Circle</button>
     </div>
 
+    <!-- Rotation -->
+    <label>Rotation</label>
+    <div class="slrow">
+      <span>Angle</span>
+      <input type="range" id="mRotate" min="0" max="359" value="0">
+      <span class="slval" id="mRotateVal">0°</span>
+    </div>
+    <p class="hint">Kéo chấm vàng quanh nút xem trước ở trên, hoặc dùng thanh trượt, để xoay nút.</p>
+
     <!-- Button image upload -->
     <label class="fileBtn" style="margin-bottom:10px;display:block;text-align:center;">
       📂 Upload Button Image <input type="file" id="mImgFile" accept="image/*">
     </label>
     <button class="miniBtn danger" id="mClearImg" style="margin-bottom:10px;">Remove Image</button>
+
+    <!-- Sound -->
+    <label>Press sound</label>
+    <div class="shapeModRow" id="mSoundRow">
+      <button class="shapeChipM" data-val="">No sound</button>
+      <button class="shapeChipM" data-val="beep1">Beep</button>
+      <button class="shapeChipM" data-val="beep2">Click</button>
+      <button class="shapeChipM" data-val="beep3">Blip</button>
+      <button class="shapeChipM" data-val="beep4">Alert</button>
+      <button class="shapeChipM" data-val="custom">Custom file</button>
+    </div>
+    <div id="mSoundFileWrap" style="display:none;">
+      <label class="fileBtn" style="display:block;text-align:center;margin-bottom:8px;">
+        🔊 Upload Sound (mp3/wav) <input type="file" id="mSoundFile" accept="audio/*">
+      </label>
+    </div>
+    <button class="miniBtn" id="mSoundTest" style="margin-bottom:10px;">▶ Test Sound</button>
 
     <div class="modalBtns">
       <button class="btn-cancel" id="btnModalCancel">Cancel</button>
@@ -316,23 +383,24 @@ const BG_PRESETS=['#1e1e1e','#0d1b2a','#142a14','#2a1414','#101820','#1a1028'];
 ═══════════════════════════════════════════════════ */
 function makeDefaultButtons(){
   return [
-    {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:0},
-    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:1},
-    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, row:1},
-    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:1},
-    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, row:2},
-    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, row:3},
+    {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:0},
+    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1},
+    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, rot:0, row:1},
+    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1},
+    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:2},
+    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, rot:0, row:3},
   ];
 }
 
 /* ═══════════════════════════════════════════════════
    STORAGE
 ═══════════════════════════════════════════════════ */
-const SK='kayraSettings_v4';
+const SK='kayraSettings_v5';
 function defaultSettings(){
   return {
     buttons: makeDefaultButtons(),
     buttonImages:{},
+    buttonSounds:{},
     background:{type:'color',value:'#1e1e1e'},
     decorImages:[],
     mqtt:{url:'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',user:'Kayra',pass:'KayraandHona24/6/2025'},
@@ -348,11 +416,20 @@ function loadSettings(){
       if(!s.mqtt) s.mqtt=d.mqtt;
       if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
       if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
+      if(!s.buttonSounds) s.buttonSounds={};
       // backfill missing size fields
       s.buttons.forEach(b=>{
         if(!b.w) b.w=92; if(!b.h) b.h=92;
         if(b.r===undefined) b.r=20;
         if(!b.fs) b.fs=36; if(!b.row&&b.row!==0) b.row=0;
+        if(!b.rot) b.rot=0;
+        if(!b.sound) b.sound='';
+      });
+      // backfill decor fields
+      (s.decorImages||[]).forEach(d=>{
+        if(!d.rot) d.rot=0;
+        if(!d.anim) d.anim='';
+        if(!d.animSpeed) d.animSpeed=4;
       });
       return s;
     }
@@ -412,6 +489,52 @@ function stopHold(){
 const toggleState={};
 
 /* ═══════════════════════════════════════════════════
+   SOUND SYSTEM
+   Preset beeps generated via WebAudio (no files needed),
+   plus support for custom uploaded audio (data URL).
+═══════════════════════════════════════════════════ */
+let audioCtx=null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+const BEEP_DEFS={
+  beep1:{wave:'sine',   freq:880, dur:.12, gain:.25}, // Beep
+  beep2:{wave:'square', freq:1200,dur:.05, gain:.18}, // Click
+  beep3:{wave:'triangle',freq:660,dur:.10, gain:.22}, // Blip
+  beep4:{wave:'sawtooth',freq:520,dur:.22, gain:.20}, // Alert
+};
+function playBeep(key){
+  const ctx=getAudioCtx(); if(!ctx) return;
+  const def=BEEP_DEFS[key]; if(!def) return;
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  osc.type=def.wave; osc.frequency.value=def.freq;
+  gain.gain.value=def.gain;
+  osc.connect(gain); gain.connect(ctx.destination);
+  const now=ctx.currentTime;
+  gain.gain.setValueAtTime(def.gain,now);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+def.dur);
+  osc.start(now); osc.stop(now+def.dur+.02);
+  if(key==='beep4'){ // little double-pulse for "alert"
+    osc.frequency.setValueAtTime(def.freq,now);
+    osc.frequency.setValueAtTime(def.freq*1.3,now+.11);
+  }
+}
+function playButtonSound(b){
+  const snd=b.sound;
+  if(!snd) return;
+  if(BEEP_DEFS[snd]){ playBeep(snd); return; }
+  // custom: stored as data URL in settings.buttonSounds[b.id]
+  const url=settings.buttonSounds&&settings.buttonSounds[b.id];
+  if(url){
+    try{ const a=new Audio(url); a.play().catch(()=>{}); }catch(e){}
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    RENDER BUTTONS
 ═══════════════════════════════════════════════════ */
 let editMode=false;
@@ -441,7 +564,8 @@ function renderButtons(){
 function makeBtnEl(b){
   const el=document.createElement('button');
   el.className='btn'; el.dataset.id=b.id;
-  el.style.cssText=`width:${b.w}px;height:${b.h}px;background-color:${b.color};border-radius:${btnRadius(b)};font-size:${b.fs}px;`;
+  const rot=b.rot||0;
+  el.style.cssText=`width:${b.w}px;height:${b.h}px;background-color:${b.color};border-radius:${btnRadius(b)};font-size:${b.fs}px;transform:rotate(${rot}deg);`;
   const img=settings.buttonImages[b.id];
   if(img){ el.style.backgroundImage=`url(${img})`; el.classList.add('has-img'); }
   if(toggleState[b.id]) el.classList.add('toggled-on');
@@ -460,6 +584,7 @@ function attachEvents(el,b){
   const onPress=e=>{
     e.preventDefault();
     if(editMode){ openBtnModal(b); return; }
+    playButtonSound(b);
     if(b.mode==='click'){
       mqttSend(b.topic||settings.defaultTopic, buildPayload(b));
       el.classList.add('active-press');
@@ -509,6 +634,7 @@ document.getElementById('btnAddNew').addEventListener('click',()=>{ openBtnModal
 let modalTarget=null; // null = new button
 
 /* --- live preview --- */
+let previewRot=0;
 function updatePreview(){
   const p=document.getElementById('btnPreview');
   const w=+document.getElementById('mWidth').value;
@@ -527,10 +653,61 @@ function updatePreview(){
     else r=+v;
   }
 
+  const pw=Math.min(w,160), ph=Math.min(h,160);
   const img=modalTarget ? settings.buttonImages[modalTarget.id] : null;
-  p.style.cssText=`width:${Math.min(w,160)}px;height:${Math.min(h,160)}px;font-size:${Math.min(fs,52)}px;background-color:${color};border-radius:${typeof r==='number'?r+'px':r};`;
+  p.style.cssText=`width:${pw}px;height:${ph}px;font-size:${Math.min(fs,52)}px;background-color:${color};border-radius:${typeof r==='number'?r+'px':r};transform:rotate(${previewRot}deg);`;
   if(img){ p.style.backgroundImage=`url(${img})`; p.textContent=''; }
   else   { p.style.backgroundImage=''; p.textContent=label; }
+  positionRotateHandle(pw,ph);
+}
+
+/* Rotate handle sits at top-center of the preview, distance = half-height + 26px,
+   and visually rotates around the preview's center together with the angle. */
+function positionRotateHandle(pw,ph){
+  const stage=document.getElementById('btnPreviewStage');
+  let handle=document.getElementById('mRotHandle');
+  let stem=document.getElementById('mRotStem');
+  if(!handle){
+    handle=document.createElement('div'); handle.id='mRotHandle'; handle.className='rotHandle'; handle.textContent='↻';
+    stem=document.createElement('div'); stem.id='mRotStem'; stem.className='rotStem';
+    stage.appendChild(stem); stage.appendChild(handle);
+    attachRotateDrag(handle,stage);
+  }
+  const cx=pw/2, cy=ph/2;
+  const dist=Math.max(pw,ph)/2+28;
+  const rad=(previewRot-90)*Math.PI/180;
+  const hx=cx+dist*Math.cos(rad), hy=cy+dist*Math.sin(rad);
+  handle.style.left=(hx-11)+'px'; handle.style.top=(hy-11)+'px';
+  stem.style.left=(cx-1)+'px'; stem.style.top=(cy-(dist-2))+'px';
+  stem.style.height=(dist-2)+'px';
+  stem.style.transform=`rotate(${previewRot}deg)`;
+}
+
+function setPreviewRotation(deg){
+  previewRot=((deg%360)+360)%360;
+  document.getElementById('mRotate').value=Math.round(previewRot);
+  document.getElementById('mRotateVal').textContent=Math.round(previewRot)+'°';
+  updatePreview();
+}
+
+function attachRotateDrag(handle,stage){
+  let dragging=false;
+  const getCenter=()=>{
+    const r=stage.getBoundingClientRect();
+    return {x:r.left+r.width/2,y:r.top+r.height/2};
+  };
+  const onMove=e=>{
+    if(!dragging) return;
+    const pt=e.touches?e.touches[0]:e;
+    const c=getCenter();
+    const ang=Math.atan2(pt.clientY-c.y,pt.clientX-c.x)*180/Math.PI+90;
+    setPreviewRotation(ang);
+  };
+  const onUp=()=>{ dragging=false; };
+  handle.addEventListener('pointerdown',e=>{ dragging=true; handle.setPointerCapture(e.pointerId); e.preventDefault(); });
+  handle.addEventListener('pointermove',onMove);
+  handle.addEventListener('pointerup',onUp);
+  handle.addEventListener('pointercancel',onUp);
 }
 
 function syncSlider(id,valId,unit,cb){
@@ -543,6 +720,9 @@ syncSlider('mHeight','mHeightVal',' px');
 syncSlider('mFontSize','mFontSizeVal',' px');
 document.getElementById('mColor').addEventListener('input',updatePreview);
 document.getElementById('mLabel').addEventListener('input',updatePreview);
+document.getElementById('mRotate').addEventListener('input',e=>{
+  setPreviewRotation(+e.target.value);
+});
 
 // Mode chips
 document.querySelectorAll('#mModeRow .shapeChipM').forEach(c=>{
@@ -581,6 +761,30 @@ document.getElementById('mClearImg').addEventListener('click',()=>{
   updatePreview();
 });
 
+// Sound chips
+document.querySelectorAll('#mSoundRow .shapeChipM').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#mSoundRow .shapeChipM').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
+    document.getElementById('mSoundFileWrap').style.display = (c.dataset.val==='custom') ? 'block' : 'none';
+  });
+});
+document.getElementById('mSoundFile').addEventListener('change',async e=>{
+  if(!e.target.files[0]) return;
+  const url=await fileToDataUrl(e.target.files[0]);
+  document.getElementById('mSoundFile')._tempUrl=url;
+});
+document.getElementById('mSoundTest').addEventListener('click',()=>{
+  const sndEl=document.querySelector('#mSoundRow .shapeChipM.active');
+  const val=sndEl?sndEl.dataset.val:'';
+  if(!val) return;
+  if(BEEP_DEFS[val]){ playBeep(val); return; }
+  const tempUrl=document.getElementById('mSoundFile')._tempUrl;
+  const existing=modalTarget&&settings.buttonSounds[modalTarget.id];
+  const url=tempUrl||existing;
+  if(url){ try{ new Audio(url).play().catch(()=>{}); }catch(e){} }
+});
+
 function setChip(row,val){
   document.querySelectorAll(`#${row} .shapeChipM`).forEach(c=>{
     c.classList.toggle('active', c.dataset.val===String(val));
@@ -608,6 +812,18 @@ function openBtnModal(b){
   const rv=b?(b.r==='circle'?'circle':String(b.r)):String(20);
   setChip('mShapeRow', rv);
 
+  // rotation
+  previewRot = b ? (b.rot||0) : 0;
+  document.getElementById('mRotate').value = previewRot;
+  document.getElementById('mRotateVal').textContent = Math.round(previewRot)+'°';
+
+  // sound
+  const sndVal = b ? (b.sound||'') : '';
+  setChip('mSoundRow', sndVal||'');
+  document.getElementById('mSoundFileWrap').style.display = (sndVal==='custom') ? 'block' : 'none';
+  document.getElementById('mSoundFile').value='';
+  document.getElementById('mSoundFile')._tempUrl=null;
+
   document.getElementById('mImgFile')._tempUrl=null;
   document.getElementById('mImgFile').value='';
 
@@ -625,6 +841,7 @@ document.getElementById('btnModalDelete').addEventListener('click',()=>{
   if(confirm('Delete button "'+modalTarget.label+'"?')){
     settings.buttons=settings.buttons.filter(b=>b.id!==modalTarget.id);
     delete settings.buttonImages[modalTarget.id];
+    delete settings.buttonSounds[modalTarget.id];
     saveSettings(); renderButtons(); buildIconGrid();
     document.getElementById('btnModal').classList.remove('open');
     modalTarget=null;
@@ -640,6 +857,7 @@ document.getElementById('btnModalSave').addEventListener('click',()=>{
   const w      =+document.getElementById('mWidth').value;
   const h      =+document.getElementById('mHeight').value;
   const fs     =+document.getElementById('mFontSize').value;
+  const rot    =+document.getElementById('mRotate').value||0;
   const modeEl =document.querySelector('#mModeRow .shapeChipM.active');
   const mode   =modeEl ? modeEl.dataset.val : 'click';
   const shpEl  =document.querySelector('#mShapeRow .shapeChipM.active');
@@ -648,19 +866,25 @@ document.getElementById('btnModalSave').addEventListener('click',()=>{
     const v=shpEl.dataset.val;
     r=(v==='circle')?'circle':v.endsWith('%')?v:+v;
   }
+  const sndEl  =document.querySelector('#mSoundRow .shapeChipM.active');
+  const sound  =sndEl ? sndEl.dataset.val : '';
   const tempImg=document.getElementById('mImgFile')._tempUrl;
+  const tempSnd=document.getElementById('mSoundFile')._tempUrl;
 
   if(modalTarget){
     // update existing
-    Object.assign(modalTarget,{label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r});
+    Object.assign(modalTarget,{label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,rot,sound});
     if(tempImg) settings.buttonImages[modalTarget.id]=tempImg;
+    if(sound==='custom'&&tempSnd) settings.buttonSounds[modalTarget.id]=tempSnd;
+    if(sound!=='custom') delete settings.buttonSounds[modalTarget.id];
   } else {
     // new button
     const id='custom_'+Date.now();
     const maxRow=settings.buttons.reduce((m,b)=>Math.max(m,b.row),0);
-    const nb={id,label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,row:maxRow+1};
+    const nb={id,label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,rot,sound,row:maxRow+1};
     settings.buttons.push(nb);
     if(tempImg) settings.buttonImages[id]=tempImg;
+    if(sound==='custom'&&tempSnd) settings.buttonSounds[id]=tempSnd;
   }
   saveSettings(); renderButtons(); buildIconGrid();
   document.getElementById('btnModal').classList.remove('open');
@@ -709,6 +933,7 @@ function buildIconGrid(){
         if(confirm('Delete button "'+b.label+'"?')){
           settings.buttons=settings.buttons.filter(x=>x.id!==b.id);
           delete settings.buttonImages[b.id];
+          delete settings.buttonSounds[b.id];
           saveSettings(); renderButtons(); buildIconGrid();
         }
       });
@@ -776,6 +1001,39 @@ function buildIconGrid(){
     addLabeledInput(cmdSec,'Topic:',b.topic||'',v=>{b.topic=v;saveSettings();});
     card.appendChild(cmdSec);
 
+    // Sound quick-pick
+    const sndSec=document.createElement('div'); sndSec.className='soundSec';
+    const sndLbl=document.createElement('span'); sndLbl.className='row-label'; sndLbl.textContent='🔊 Press Sound:';
+    sndSec.appendChild(sndLbl);
+    const sndRow=document.createElement('div'); sndRow.className='soundChipRow';
+    const SOUND_OPTS=[['','None'],['beep1','Beep'],['beep2','Click'],['beep3','Blip'],['beep4','Alert']];
+    SOUND_OPTS.forEach(([val,txt])=>{
+      const c=document.createElement('button'); c.className='soundChip'+((b.sound||'')===val?' active':'');
+      c.textContent=txt;
+      c.addEventListener('click',()=>{ b.sound=val; saveSettings(); buildIconGrid(); });
+      sndRow.appendChild(c);
+    });
+    sndSec.appendChild(sndRow);
+    const sndRow2=document.createElement('div'); sndRow2.className='soundRow2';
+    const sfl=document.createElement('label'); sfl.className='fileBtn'; sfl.textContent='📂 Custom audio';
+    const sfi=document.createElement('input'); sfi.type='file'; sfi.accept='audio/*';
+    sfi.addEventListener('change',async()=>{
+      if(!sfi.files[0]) return;
+      const url=await fileToDataUrl(sfi.files[0]);
+      settings.buttonSounds[b.id]=url; b.sound='custom'; saveSettings(); buildIconGrid();
+    });
+    sfl.appendChild(sfi); sndRow2.appendChild(sfl);
+    const testBtn=document.createElement('button'); testBtn.className='soundTestBtn'; testBtn.textContent='▶';
+    testBtn.addEventListener('click',()=>playButtonSound(b));
+    sndRow2.appendChild(testBtn);
+    if(b.sound){
+      const clr=document.createElement('button'); clr.className='soundClearBtn'; clr.textContent='✕';
+      clr.addEventListener('click',()=>{ b.sound=''; delete settings.buttonSounds[b.id]; saveSettings(); buildIconGrid(); });
+      sndRow2.appendChild(clr);
+    }
+    sndSec.appendChild(sndRow2);
+    card.appendChild(sndSec);
+
     grid.appendChild(card);
   });
 }
@@ -813,10 +1071,13 @@ let decorIdCtr=Date.now();
 document.getElementById('decorFileInput').addEventListener('change',async e=>{
   if(e.target.files[0]){
     const url=await fileToDataUrl(e.target.files[0]);
-    settings.decorImages.push({id:'d'+decorIdCtr++,src:url,x:50,y:50,size:25});
+    settings.decorImages.push({id:'d'+decorIdCtr++,src:url,x:50,y:50,size:25,rot:0,anim:'',animSpeed:4});
     saveSettings();applyDecorLayer();buildDecorList(); e.target.value='';
   }
 });
+
+const ANIM_OPTS=[['','None'],['float','Float'],['orbit','Orbit'],['pulse','Pulse'],['spin','Spin']];
+
 function buildDecorList(){
   const list=document.getElementById('decorList'); list.innerHTML='';
   if(!settings.decorImages.length){
@@ -827,29 +1088,135 @@ function buildDecorList(){
     const ed=document.createElement('div'); ed.className='posEditor';
     if(settings.background.type==='image') ed.style.backgroundImage=`url(${settings.background.value})`;
     else ed.style.background=settings.background.value;
+
+    // wrapper holds the image + rotate handle + resize handle, all rotating together
+    const wrap=document.createElement('div'); wrap.className='decorWrap';
+    const sizePx=d.size*2;
+    wrap.style.left=d.x+'%'; wrap.style.top=d.y+'%';
+    wrap.style.width=sizePx+'px'; wrap.style.height=sizePx+'px';
+    wrap.style.transform=`translate(-50%,-50%) rotate(${d.rot||0}deg)`;
     const img=document.createElement('img'); img.src=d.src;
-    img.style.left=d.x+'%'; img.style.top=d.y+'%'; img.style.width=(d.size*2)+'px';
-    ed.appendChild(img);
-    let drag=false;
-    img.addEventListener('pointerdown',e=>{drag=true;img.setPointerCapture(e.pointerId);});
-    img.addEventListener('pointermove',e=>{
-      if(!drag) return;
-      const rc=ed.getBoundingClientRect();
-      d.x=Math.round(Math.max(0,Math.min(100,(e.clientX-rc.left)/rc.width*100)));
-      d.y=Math.round(Math.max(0,Math.min(100,(e.clientY-rc.top)/rc.height*100)));
-      img.style.left=d.x+'%'; img.style.top=d.y+'%'; applyDecorLayer();
+    img.style.transform='none'; img.style.left='0'; img.style.top='0'; img.style.position='static';
+    wrap.appendChild(img);
+
+    const rotH=document.createElement('div'); rotH.className='rotHandle'; rotH.style.position='absolute';
+    rotH.textContent='↻';
+    rotH.style.left='50%'; rotH.style.top='-30px'; rotH.style.marginLeft='-11px';
+    wrap.appendChild(rotH);
+
+    const resizeH=document.createElement('div'); resizeH.className='resizeHandle';
+    wrap.appendChild(resizeH);
+
+    ed.appendChild(wrap);
+
+    // ── Drag to move ──
+    let mode=null; // 'move' | 'rotate' | 'resize'
+
+    wrap.addEventListener('pointerdown',e=>{
+      if(e.target===rotH||e.target===resizeH) return;
+      mode='move'; wrap.setPointerCapture(e.pointerId); e.preventDefault();
     });
-    img.addEventListener('pointerup',()=>{drag=false;saveSettings();});
+    rotH.addEventListener('pointerdown',e=>{
+      mode='rotate'; rotH.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+    });
+    resizeH.addEventListener('pointerdown',e=>{
+      mode='resize'; resizeH.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+    });
+
+    const onMove=e=>{
+      if(!mode) return;
+      const rc=ed.getBoundingClientRect();
+      if(mode==='move'){
+        d.x=Math.round(Math.max(0,Math.min(100,(e.clientX-rc.left)/rc.width*100)));
+        d.y=Math.round(Math.max(0,Math.min(100,(e.clientY-rc.top)/rc.height*100)));
+        wrap.style.left=d.x+'%'; wrap.style.top=d.y+'%';
+        applyDecorLayer();
+      } else if(mode==='rotate'){
+        const cx=rc.left+rc.width*(d.x/100), cy=rc.top+rc.height*(d.y/100);
+        const ang=Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI+90;
+        d.rot=Math.round(((ang%360)+360)%360);
+        wrap.style.transform=`translate(-50%,-50%) rotate(${d.rot}deg)`;
+        applyDecorLayer();
+      } else if(mode==='resize'){
+        const cx=rc.left+rc.width*(d.x/100), cy=rc.top+rc.height*(d.y/100);
+        const dist=Math.hypot(e.clientX-cx,e.clientY-cy); // distance from center to pointer
+        // dist ≈ half-diagonal of the wrap box ≈ size * 1.414 (since wrap is size*2 square)
+        d.size=Math.round(Math.max(5,Math.min(60,dist/1.414)));
+        const sp=d.size*2;
+        wrap.style.width=sp+'px'; wrap.style.height=sp+'px';
+        sr_valEl.textContent=d.size;
+        ss.value=d.size;
+        applyDecorLayer();
+      }
+    };
+    const onUp=()=>{ if(mode){ mode=null; saveSettings(); } };
+    wrap.addEventListener('pointermove',onMove);
+    wrap.addEventListener('pointerup',onUp);
+    wrap.addEventListener('pointercancel',onUp);
+
+    // ── Size slider (keeps in sync with drag-resize) ──
     const sr=document.createElement('div'); sr.className='sizeRow';
-    const sl=document.createElement('span'); sl.textContent='Size: ';
+    const sl=document.createElement('span'); sl.textContent='Size:';
     const ss=document.createElement('input'); ss.type='range'; ss.min='5'; ss.max='60'; ss.value=d.size; ss.style.touchAction='pan-x';
-    ss.addEventListener('input',()=>{d.size=+ss.value;img.style.width=(d.size*2)+'px';applyDecorLayer();});
+    const sr_valEl=document.createElement('span'); sr_valEl.className='val'; sr_valEl.textContent=d.size;
+    ss.addEventListener('input',()=>{
+      d.size=+ss.value; sr_valEl.textContent=d.size;
+      const sp=d.size*2; wrap.style.width=sp+'px'; wrap.style.height=sp+'px';
+      applyDecorLayer();
+    });
     ss.addEventListener('change',saveSettings);
-    const db=document.createElement('button'); db.className='miniBtn danger'; db.style.cssText='width:auto;padding:4px 10px;';
+    sr.appendChild(sl); sr.appendChild(ss); sr.appendChild(sr_valEl);
+
+    // ── Rotation slider (keeps in sync with drag-rotate) ──
+    const rr=document.createElement('div'); rr.className='sizeRow';
+    const rl=document.createElement('span'); rl.textContent='Rotate:';
+    const rs=document.createElement('input'); rs.type='range'; rs.min='0'; rs.max='359'; rs.value=d.rot||0; rs.style.touchAction='pan-x';
+    const rr_valEl=document.createElement('span'); rr_valEl.className='val'; rr_valEl.textContent=(d.rot||0)+'°';
+    rs.addEventListener('input',()=>{
+      d.rot=+rs.value; rr_valEl.textContent=d.rot+'°';
+      wrap.style.transform=`translate(-50%,-50%) rotate(${d.rot}deg)`;
+      applyDecorLayer();
+    });
+    rs.addEventListener('change',saveSettings);
+    rr.appendChild(rl); rr.appendChild(rs); rr.appendChild(rr_valEl);
+
+    // ── Animation chips ──
+    const animLbl=document.createElement('p'); animLbl.className='hint'; animLbl.style.marginTop='10px';
+    animLbl.textContent='Loop animation:';
+    const animRow=document.createElement('div'); animRow.className='animChipRow';
+    ANIM_OPTS.forEach(([val,txt])=>{
+      const c=document.createElement('button'); c.className='animChip'+((d.anim||'')===val?' active':'');
+      c.textContent=txt;
+      c.addEventListener('click',()=>{
+        d.anim=val; saveSettings(); buildDecorList(); applyDecorLayer();
+      });
+      animRow.appendChild(c);
+    });
+
+    const speedRow=document.createElement('div'); speedRow.className='animSpeedRow'+(d.anim?' show':'');
+    const spLbl=document.createElement('span'); spLbl.textContent='Speed:';
+    const spInput=document.createElement('input'); spInput.type='range'; spInput.min='1'; spInput.max='12'; spInput.step='0.5';
+    spInput.value=d.animSpeed||4; spInput.style.touchAction='pan-x';
+    const spVal=document.createElement('span'); spVal.className='val'; spVal.textContent=(d.animSpeed||4)+'s';
+    spInput.addEventListener('input',()=>{
+      d.animSpeed=+spInput.value; spVal.textContent=d.animSpeed+'s';
+      applyDecorLayer();
+    });
+    spInput.addEventListener('change',saveSettings);
+    speedRow.appendChild(spLbl); speedRow.appendChild(spInput); speedRow.appendChild(spVal);
+
+    const db=document.createElement('button'); db.className='miniBtn danger'; db.style.cssText='width:auto;padding:4px 10px;margin-top:8px;';
     db.textContent='Remove';
     db.addEventListener('click',()=>{settings.decorImages=settings.decorImages.filter(x=>x.id!==d.id);saveSettings();applyDecorLayer();buildDecorList();});
-    sr.appendChild(sl); sr.appendChild(ss); sr.appendChild(db);
-    card.appendChild(ed); card.appendChild(sr); list.appendChild(card);
+
+    card.appendChild(ed);
+    card.appendChild(sr);
+    card.appendChild(rr);
+    card.appendChild(animLbl);
+    card.appendChild(animRow);
+    card.appendChild(speedRow);
+    card.appendChild(db);
+    list.appendChild(card);
   });
 }
 
@@ -867,13 +1234,79 @@ function applyBackground(){
   if(bg.type==='image'&&bg.value){layer.style.backgroundImage=`url(${bg.value})`;layer.style.backgroundColor='#1e1e1e';}
   else{layer.style.backgroundImage='';layer.style.backgroundColor=bg.value||'#1e1e1e';}
 }
+/* ── Decor live-layer animation (orbit needs JS, others use CSS) ── */
+let decorOrbitRAF=null;
 function applyDecorLayer(){
-  const layer=document.getElementById('decorLayer'); layer.innerHTML='';
+  const layer=document.getElementById('decorLayer');
+  const existing={};
+  Array.from(layer.children).forEach(el=>{ if(el.dataset.decorId) existing[el.dataset.decorId]=el; });
+
+  const seen=new Set();
   settings.decorImages.forEach(d=>{
-    const img=document.createElement('img'); img.src=d.src;
+    seen.add(d.id);
+    let img=existing[d.id];
+    if(!img){ img=document.createElement('img'); img.dataset.decorId=d.id; layer.appendChild(img); }
+    if(img.src!==d.src) img.src=d.src;
+    img.dataset.baseX=d.x; img.dataset.baseY=d.y;
     img.style.left=d.x+'%'; img.style.top=d.y+'%'; img.style.width=d.size+'vw';
-    layer.appendChild(img);
+    img.className=''; // reset anim classes, re-apply below
+    img.removeAttribute('data-orbit');
+
+    const rot=d.rot||0;
+    const speed=d.animSpeed||4;
+
+    if(d.anim==='float'){
+      img.classList.add('decorAnim-float');
+      img.style.animationDuration=speed+'s';
+      img.style.transform=`translate(-50%,-50%) rotate(${rot}deg)`;
+    } else if(d.anim==='pulse'){
+      img.classList.add('decorAnim-pulse');
+      img.style.animationDuration=speed+'s';
+      img.style.setProperty('--rot',rot+'deg');
+    } else if(d.anim==='spin'){
+      img.classList.add('decorAnim-spin');
+      img.style.animationDuration=speed+'s';
+      img.style.setProperty('--rot',rot+'deg');
+    } else if(d.anim==='orbit'){
+      img.dataset.orbit='1';
+      img.dataset.orbitSpeed=speed;
+      img.style.transform=`translate(-50%,-50%) rotate(${rot}deg)`;
+    } else {
+      img.style.transform=`translate(-50%,-50%) rotate(${rot}deg)`;
+    }
   });
+
+  // remove decor images that no longer exist
+  Object.keys(existing).forEach(id=>{ if(!seen.has(id)) existing[id].remove(); });
+
+  startDecorOrbitLoop();
+}
+
+function startDecorOrbitLoop(){
+  const layer=document.getElementById('decorLayer');
+  const orbitImgs=()=>Array.from(layer.querySelectorAll('img[data-orbit="1"]'));
+  if(!orbitImgs().length){
+    if(decorOrbitRAF){ cancelAnimationFrame(decorOrbitRAF); decorOrbitRAF=null; }
+    return;
+  }
+  if(decorOrbitRAF) return; // already running — don't reset the time base
+  const t0=performance.now();
+  const radius=3.2; // orbit radius in % of viewport, kept small so it stays near its anchor point
+  const tick=now=>{
+    const els=orbitImgs();
+    if(!els.length){ decorOrbitRAF=null; return; }
+    els.forEach(img=>{
+      const speed=+img.dataset.orbitSpeed||4;
+      const elapsed=(now-t0)/1000;
+      const ang=(elapsed/speed)*2*Math.PI;
+      const bx=+img.dataset.baseX, by=+img.dataset.baseY;
+      const ox=bx+radius*Math.cos(ang);
+      const oy=by+radius*Math.sin(ang);
+      img.style.left=ox+'%'; img.style.top=oy+'%';
+    });
+    decorOrbitRAF=requestAnimationFrame(tick);
+  };
+  decorOrbitRAF=requestAnimationFrame(tick);
 }
 
 document.getElementById('resetAllBtn').addEventListener('click',()=>{
