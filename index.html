@@ -411,20 +411,20 @@ const BG_PRESETS=['#1e1e1e','#0d1b2a','#142a14','#2a1414','#101820','#1a1028'];
 ═══════════════════════════════════════════════════ */
 function makeDefaultButtons(){
   return [
-    {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:0, x:50, y:15},
-    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:25, y:40},
-    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, rot:0, row:1, x:50, y:40},
-    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:75, y:40},
-    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:2, x:50, y:65},
-    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, rot:0, row:3, x:50, y:88},
+    {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:0, x:50, y:22},
+    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:25, y:42},
+    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, rot:0, row:1, x:50, y:42},
+    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:75, y:42},
+    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:2, x:50, y:62},
+    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, rot:0, row:3, x:50, y:84},
   ];
 }
 
 /* ═══════════════════════════════════════════════════
    STORAGE
 ═══════════════════════════════════════════════════ */
-const SK='kayraSettings_v6';
-const SK_OLD='kayraSettings_v5';
+const SK='kayraSettings_v7';
+const SK_OLD='kayraSettings_v6';
 
 /* Compute row-based x,y for buttons that lack them */
 function backfillPositions(buttons){
@@ -434,7 +434,7 @@ function backfillPositions(buttons){
   const nr=rks.length;
   rks.forEach((rk,ri)=>{
     const grp=rg[rk]; const nc=grp.length;
-    const yp=nr===1?50:Math.round(15+(ri/(nr-1))*72);
+    const yp=nr===1?50:Math.round(22+(ri/(nr-1))*62);
     grp.forEach((b,ci)=>{
       if(b.x===undefined) b.x=Math.round(50+(ci-(nc-1)/2)*25);
       if(b.y===undefined) b.y=yp;
@@ -458,7 +458,11 @@ function loadSettings(){
     // Try current version first
     let raw=localStorage.getItem(SK);
     // Migrate from v5 if needed
-    if(!raw){ raw=localStorage.getItem(SK_OLD); if(raw){ const old=JSON.parse(raw); (old.buttons||[]).forEach(b=>{delete b.x;delete b.y;}); raw=JSON.stringify(old); } }
+    if(!raw){
+      // migrate from v6 or v5
+      const oldRaw=localStorage.getItem(SK_OLD)||localStorage.getItem('kayraSettings_v5');
+      if(oldRaw){ const old=JSON.parse(oldRaw); (old.buttons||[]).forEach(b=>{delete b.x;delete b.y;}); raw=JSON.stringify(old); }
+    }
     if(raw){
       const s=JSON.parse(raw);
       const d=defaultSettings();
