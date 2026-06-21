@@ -22,6 +22,24 @@ h2{margin:6px 0;font-size:20px;text-shadow:0 1px 4px rgba(0,0,0,.8);letter-spaci
 .speed-box{margin:8px auto;width:82%;max-width:320px;background:rgba(0,0,0,.35);padding:10px;border-radius:14px;}
 .speed-box label{display:block;margin-bottom:5px;font-size:14px;}
 .speed-box input[type=range]{width:100%;height:30px;touch-action:pan-x;}
+/* Slider system */
+#sliderBox{display:flex;flex-direction:column;gap:6px;margin:4px auto 0;width:88%;max-width:340px;}
+.s-wrap{background:rgba(0,0,0,.35);padding:8px 12px;border-radius:14px;}
+.s-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:13px;}
+.s-val{color:#a0d4ff;font-weight:bold;}
+.s-unit{font-size:11px;color:#888;margin-left:4px;}
+input.crange{-webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;cursor:pointer;touch-action:pan-x;}
+input.crange::-webkit-slider-runnable-track{height:10px;border-radius:5px;background-color:var(--track-bg,#444444);background-image:var(--track-img,none);background-size:cover;background-position:center;}
+input.crange::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:-10px;border-radius:50%;border:2px solid #1e1e1e;box-shadow:0 2px 6px rgba(0,0,0,.5);background-color:var(--thumb-bg,#4caf50);background-image:var(--thumb-img,none);background-size:cover;background-position:center;}
+input.crange::-moz-range-track{height:10px;border-radius:5px;background-color:var(--track-bg,#444444);}
+input.crange::-moz-range-thumb{width:28px;height:28px;border-radius:50%;border:2px solid #1e1e1e;background-color:var(--thumb-bg,#4caf50);}
+/* Slider settings card */
+.sliderCard{background:#191919;border-radius:12px;padding:10px;margin-bottom:10px;}
+.sliderCard-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.sliderCard input[type=text],.sliderCard input[type=number]{width:100%;padding:5px 7px;background:#0e0e0e;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:12px;margin-bottom:5px;}
+.sliderCard .row-label{font-size:10px;color:#9fd3ff;margin-bottom:2px;display:block;}
+.sliderCard .twoCol{display:flex;gap:6px;}
+.sliderCard .twoCol>div{flex:1;}
 
 /* ── Edit bar ── */
 .editBar{display:none;align-items:center;justify-content:center;gap:10px;padding:5px 10px;background:rgba(0,0,0,.55);}
@@ -214,10 +232,7 @@ input[type=file]{display:none;}
     <button class="gearBtn" id="openSettings">⚙</button>
   </div>
   <div id="status">⚡ Connecting...</div>
-  <div class="speed-box">
-    <label>Speed: <span id="speedValue">200</span> / 255</label>
-    <input type="range" id="speedSlider" min="60" max="255" value="200">
-  </div>
+  <div id="sliderBox"></div>
   <div class="editBar" id="editBar">
     <span>✏ Edit Mode — drag to move · handles to rotate/resize · tap to configure</span>
     <button class="editToggle off" id="editToggleBtn">Done</button>
@@ -261,6 +276,14 @@ input[type=file]{display:none;}
     <div class="bgPresetRow" id="bgPresetRow"></div>
     <label class="fileBtn">Upload Image <input type="file" id="bgFileInput" accept="image/*"></label>
     <button class="miniBtn danger" id="clearBgBtn" style="width:auto;padding:8px 14px;margin-left:8px;">Clear</button>
+  </div>
+
+  <!-- Sliders -->
+  <div class="section">
+    <h4>🏚 Sliders</h4>
+    <p class="hint" style="margin-bottom:10px;">Customize sliders shown on the controller. Each slider sends its value via MQTT on button press. You can set custom track &amp; thumb images.</p>
+    <button class="miniBtn green" id="addSliderBtn" style="margin-bottom:10px;">+ Add Slider</button>
+    <div id="sliderSettingsGrid"></div>
   </div>
 
   <!-- Decor -->
@@ -450,7 +473,8 @@ function defaultSettings(){
     background:{type:'color',value:'#1e1e1e'},
     decorImages:[],
     mqtt:{url:'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',user:'Kayra',pass:'KayraandHona24/6/2025'},
-    defaultTopic:'robot/cmd'
+    defaultTopic:'robot/cmd',
+    sliders:[{id:'speed',label:'Speed',min:60,max:255,value:200,unit:'/ 255',topic:'',msgKey:'speed',trackColor:'#444444',trackImg:null,thumbColor:'#4caf50',thumbImg:null}]
   };
 }
 function loadSettings(){
@@ -470,6 +494,11 @@ function loadSettings(){
       if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
       if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
       if(!s.buttonSounds) s.buttonSounds={};
+      if(!s.sliders) s.sliders=defaultSettings().sliders;
+      s.sliders.forEach(sl=>{
+        if(sl.trackColor===undefined) sl.trackColor='#444444';
+        if(sl.thumbColor===undefined) sl.thumbColor='#4caf50';
+      });
       s.buttons.forEach(b=>{
         if(!b.w) b.w=92; if(!b.h) b.h=92;
         if(b.r===undefined) b.r=20;
@@ -499,6 +528,35 @@ let settings=loadSettings();
    MQTT
 ═══════════════════════════════════════════════════ */
 let mqttClient=null, speed=200;
+const sliderValues={};
+
+function renderSliders(){
+  const box=document.getElementById('sliderBox'); box.innerHTML='';
+  (settings.sliders||[]).forEach(s=>{
+    if(sliderValues[s.id]===undefined) sliderValues[s.id]=s.value;
+    const wrap=document.createElement('div'); wrap.className='s-wrap';
+    const hdr=document.createElement('div'); hdr.className='s-header';
+    hdr.innerHTML=`<span>${s.label}: <span class="s-val" id="sv_${s.id}">${sliderValues[s.id]}</span><span class="s-unit">${s.unit||''}</span></span>`;
+    const inp=document.createElement('input'); inp.type='range'; inp.className='crange';
+    inp.min=s.min; inp.max=s.max; inp.value=sliderValues[s.id];
+    applySliderStyle(inp,s);
+    inp.addEventListener('input',()=>{
+      sliderValues[s.id]=+inp.value;
+      if(s.id==='speed') speed=+inp.value;
+      const el=document.getElementById('sv_'+s.id); if(el) el.textContent=inp.value;
+    });
+    wrap.appendChild(hdr); wrap.appendChild(inp);
+    box.appendChild(wrap);
+  });
+  // keep speed global in sync
+  speed=sliderValues['speed']!==undefined?sliderValues['speed']:200;
+}
+function applySliderStyle(inp,s){
+  inp.style.setProperty('--track-bg',s.trackColor||'#444444');
+  inp.style.setProperty('--thumb-bg',s.thumbColor||'#4caf50');
+  inp.style.setProperty('--track-img',s.trackImg?`url(${s.trackImg})`:'none');
+  inp.style.setProperty('--thumb-img',s.thumbImg?`url(${s.thumbImg})`:'none');
+}
 
 function connectMQTT(){
   if(mqttClient){ try{mqttClient.end(true);}catch(e){} }
@@ -517,13 +575,17 @@ function mqttSend(topic,payload){
   if(!mqttClient||!mqttClient.connected) return;
   mqttClient.publish(topic||settings.defaultTopic, payload);
 }
-function buildPayload(b){ return JSON.stringify({cmd:b.cmdOn, speed}); }
-function buildPayloadOff(b){ return b.cmdOff ? JSON.stringify({cmd:b.cmdOff, speed}) : null; }
-
-document.getElementById('speedSlider').addEventListener('input',e=>{
-  speed=+e.target.value;
-  document.getElementById('speedValue').textContent=speed;
-});
+function buildPayload(b){
+  const payload={cmd:b.cmdOn};
+  (settings.sliders||[]).forEach(s=>{ payload[s.msgKey||s.id]=sliderValues[s.id]!==undefined?sliderValues[s.id]:s.value; });
+  return JSON.stringify(payload);
+}
+function buildPayloadOff(b){
+  if(!b.cmdOff) return null;
+  const payload={cmd:b.cmdOff};
+  (settings.sliders||[]).forEach(s=>{ payload[s.msgKey||s.id]=sliderValues[s.id]!==undefined?sliderValues[s.id]:s.value; });
+  return JSON.stringify(payload);
+}
 
 /* ═══════════════════════════════════════════════════
    HOLD SYSTEM
@@ -608,7 +670,9 @@ function makeBtnEl(b){
   const el=document.createElement('button');
   el.className='btn'; el.dataset.id=b.id;
   const rot=b.rot||0;
-  const x=b.x!==undefined?b.x:50, y=b.y!==undefined?b.y:50;
+  if(b.x===undefined) b.x=50;
+  if(b.y===undefined) b.y=50;
+  const x=b.x, y=b.y;
   el.style.cssText=`left:${x}%;top:${y}%;width:${b.w}px;height:${b.h}px;background-color:${b.color};border-radius:${btnRadius(b)};font-size:${b.fs}px;transform:translate(-50%,-50%) rotate(${rot}deg);`;
   const img=settings.buttonImages[b.id];
   if(img){ el.style.backgroundImage=`url(${img})`; el.classList.add('has-img'); }
@@ -998,7 +1062,7 @@ document.getElementById('btnModalSave').addEventListener('click',()=>{
     // new button
     const id='custom_'+Date.now();
     const maxRow=settings.buttons.reduce((m,b)=>Math.max(m,b.row),0);
-    const nb={id,label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,rot,sound,row:maxRow+1};
+    const nb={id,label,cmdOn,cmdOff,topic,color,w,h,fs,mode,r,rot,sound,row:maxRow+1,x:50,y:50};
     settings.buttons.push(nb);
     if(tempImg) settings.buttonImages[id]=tempImg;
     if(sound==='custom'&&tempSnd) settings.buttonSounds[id]=tempSnd;
@@ -1530,8 +1594,56 @@ document.getElementById('cfgImportFile').addEventListener('change',async e=>{
   }
 });
 
-/* ── Validate export note: buttonImages & buttonSounds are stored as base64
-   data-URLs inside settings, so they are automatically included in the export. ── */
+/* ═══════════════════════════════════════════════════
+   SLIDER SETTINGS UI
+═══════════════════════════════════════════════════ */
+function buildSliderSettingsGrid(){
+  const grid=document.getElementById('sliderSettingsGrid'); grid.innerHTML='';
+  (settings.sliders||[]).forEach(s=>{
+    const card=document.createElement('div'); card.className='sliderCard';
+    const hdr=document.createElement('div'); hdr.className='sliderCard-header';
+    const nm=document.createElement('span'); nm.style.cssText='font-size:12px;font-weight:bold;color:#ccc;'; nm.textContent=s.label+' ('+s.id+')';
+    hdr.appendChild(nm);
+    if(s.id!=='speed'){
+      const del=document.createElement('button'); del.className='iconCard-del'; del.textContent='Delete';
+      del.addEventListener('click',()=>{ if(confirm('Delete slider "'+s.label+'"?')){ settings.sliders=settings.sliders.filter(x=>x.id!==s.id); saveSettings(); renderSliders(); buildSliderSettingsGrid(); } });
+      hdr.appendChild(del);
+    }
+    card.appendChild(hdr);
+    const mkField=(lbl,val,cb)=>{ const sp=document.createElement('span'); sp.className='row-label'; sp.textContent=lbl; const inp=document.createElement('input'); inp.type='text'; inp.value=val||''; inp.addEventListener('change',()=>cb(inp.value.trim())); card.appendChild(sp); card.appendChild(inp); };
+    const mkNumField=(lbl,val,cb)=>{ const sp=document.createElement('span'); sp.className='row-label'; sp.textContent=lbl; const inp=document.createElement('input'); inp.type='number'; inp.value=val||0; inp.style.cssText='width:100%;padding:5px 7px;background:#0e0e0e;border:1px solid #3a3a3a;border-radius:6px;color:#fff;font-size:12px;margin-bottom:5px;'; inp.addEventListener('change',()=>cb(+inp.value)); card.appendChild(sp); card.appendChild(inp); };
+    mkField('Label:',s.label,v=>{s.label=v;saveSettings();renderSliders();buildSliderSettingsGrid();});
+    const twoA=document.createElement('div'); twoA.className='twoCol';
+    const divMin=document.createElement('div'); divMin.innerHTML='<span class="row-label">Min:</span>'; const inMin=document.createElement('input'); inMin.type='number'; inMin.value=s.min; Object.assign(inMin.style,{width:'100%',padding:'5px',background:'#0e0e0e',border:'1px solid #3a3a3a',borderRadius:'6px',color:'#fff',fontSize:'12px'}); inMin.addEventListener('change',()=>{s.min=+inMin.value;saveSettings();renderSliders();}); divMin.appendChild(inMin); twoA.appendChild(divMin);
+    const divMax=document.createElement('div'); divMax.innerHTML='<span class="row-label">Max:</span>'; const inMax=document.createElement('input'); inMax.type='number'; inMax.value=s.max; Object.assign(inMax.style,{width:'100%',padding:'5px',background:'#0e0e0e',border:'1px solid #3a3a3a',borderRadius:'6px',color:'#fff',fontSize:'12px'}); inMax.addEventListener('change',()=>{s.max=+inMax.value;saveSettings();renderSliders();}); divMax.appendChild(inMax); twoA.appendChild(divMax);
+    card.appendChild(twoA);
+    mkField('Unit label (e.g. /255):',s.unit,v=>{s.unit=v;saveSettings();renderSliders();});
+    mkField('MQTT topic (blank=default):',s.topic,v=>{s.topic=v;saveSettings();});
+    mkField('JSON key (e.g. speed):',s.msgKey,v=>{s.msgKey=v;saveSettings();});
+    // Track styling
+    const trkLbl=document.createElement('span'); trkLbl.className='row-label'; trkLbl.textContent='Track color:'; card.appendChild(trkLbl);
+    const trkC=document.createElement('input'); trkC.type='color'; trkC.value=s.trackColor||'#444444'; trkC.style.cssText='width:100%;height:32px;padding:2px;background:#111;border:1px solid #3a3a3a;border-radius:6px;margin-bottom:5px;cursor:pointer;'; trkC.addEventListener('input',()=>{s.trackColor=trkC.value;saveSettings();renderSliders();}); card.appendChild(trkC);
+    const trkImgLbl=document.createElement('label'); trkImgLbl.className='fileBtn'; trkImgLbl.style.cssText='font-size:11px;padding:5px 8px;margin-bottom:5px;display:block;'; trkImgLbl.textContent='🖼 Track Image';
+    const trkImgF=document.createElement('input'); trkImgF.type='file'; trkImgF.accept='image/*';
+    trkImgF.addEventListener('change',async()=>{ if(!trkImgF.files[0]) return; s.trackImg=await fileToDataUrl(trkImgF.files[0]); saveSettings();renderSliders(); });
+    trkImgLbl.appendChild(trkImgF); card.appendChild(trkImgLbl);
+    if(s.trackImg){ const clr=document.createElement('button'); clr.className='miniBtn danger'; clr.style='margin-bottom:6px;'; clr.textContent='Clear Track Image'; clr.addEventListener('click',()=>{s.trackImg=null;saveSettings();renderSliders();buildSliderSettingsGrid();}); card.appendChild(clr); }
+    // Thumb styling
+    const thLbl=document.createElement('span'); thLbl.className='row-label'; thLbl.textContent='Thumb color:'; card.appendChild(thLbl);
+    const thC=document.createElement('input'); thC.type='color'; thC.value=s.thumbColor||'#4caf50'; thC.style.cssText='width:100%;height:32px;padding:2px;background:#111;border:1px solid #3a3a3a;border-radius:6px;margin-bottom:5px;cursor:pointer;'; thC.addEventListener('input',()=>{s.thumbColor=thC.value;saveSettings();renderSliders();}); card.appendChild(thC);
+    const thImgLbl=document.createElement('label'); thImgLbl.className='fileBtn'; thImgLbl.style.cssText='font-size:11px;padding:5px 8px;margin-bottom:5px;display:block;'; thImgLbl.textContent='🖼 Thumb Image';
+    const thImgF=document.createElement('input'); thImgF.type='file'; thImgF.accept='image/*';
+    thImgF.addEventListener('change',async()=>{ if(!thImgF.files[0]) return; s.thumbImg=await fileToDataUrl(thImgF.files[0]); saveSettings();renderSliders(); });
+    thImgLbl.appendChild(thImgF); card.appendChild(thImgLbl);
+    if(s.thumbImg){ const clr2=document.createElement('button'); clr2.className='miniBtn danger'; clr2.style='margin-bottom:6px;'; clr2.textContent='Clear Thumb Image'; clr2.addEventListener('click',()=>{s.thumbImg=null;saveSettings();renderSliders();buildSliderSettingsGrid();}); card.appendChild(clr2); }
+    grid.appendChild(card);
+  });
+}
+document.getElementById('addSliderBtn').addEventListener('click',()=>{
+  const id='slider_'+Date.now();
+  settings.sliders.push({id,label:'Slider',min:0,max:100,value:50,unit:'',topic:'',msgKey:id,trackColor:'#444444',trackImg:null,thumbColor:'#1565c0',thumbImg:null});
+  saveSettings(); renderSliders(); buildSliderSettingsGrid();
+});
 
 /* ── Global safety ── */
 document.addEventListener('touchend',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
@@ -1539,10 +1651,12 @@ window.addEventListener('blur',stopHold);
 
 /* ── Boot ── */
 applyBackground(); applyDecorLayer();
+renderSliders();
 renderButtons();
 buildIconGrid();
 buildBgPresets();
 buildDecorList();
+buildSliderSettingsGrid();
 </script>
 </body>
 </html>
