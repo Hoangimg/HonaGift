@@ -412,18 +412,36 @@ const BG_PRESETS=['#1e1e1e','#0d1b2a','#142a14','#2a1414','#101820','#1a1028'];
 function makeDefaultButtons(){
   return [
     {id:'F',    label:'↑',  cmdOn:'F',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:0, x:50, y:15},
-    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:28, y:52},
-    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, rot:0, row:1, x:50, y:52},
-    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:72, y:52},
-    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:2, x:50, y:80},
-    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, rot:0, row:3, x:15, y:72},
+    {id:'L',    label:'←',  cmdOn:'L',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:25, y:40},
+    {id:'STOP', label:'■',  cmdOn:'S',     cmdOff:'',  mode:'click', color:'#d32f2f', w:92, h:92, r:20, fs:36, rot:0, row:1, x:50, y:40},
+    {id:'R',    label:'→',  cmdOn:'R',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:1, x:75, y:40},
+    {id:'B',    label:'↓',  cmdOn:'B',     cmdOff:'S', mode:'hold',  color:'#333333', w:92, h:92, r:20, fs:36, rot:0, row:2, x:50, y:65},
+    {id:'SHOOT',label:'🔥', cmdOn:'SHOOT', cmdOff:'',  mode:'click', color:'#ff9800', w:92, h:92, r:20, fs:36, rot:0, row:3, x:50, y:88},
   ];
 }
 
 /* ═══════════════════════════════════════════════════
    STORAGE
 ═══════════════════════════════════════════════════ */
-const SK='kayraSettings_v5';
+const SK='kayraSettings_v6';
+const SK_OLD='kayraSettings_v5';
+
+/* Compute row-based x,y for buttons that lack them */
+function backfillPositions(buttons){
+  const rg={};
+  buttons.forEach(b=>{const r=b.row||0;(rg[r]=rg[r]||[]).push(b);});
+  const rks=Object.keys(rg).sort((a,c)=>+a-+c);
+  const nr=rks.length;
+  rks.forEach((rk,ri)=>{
+    const grp=rg[rk]; const nc=grp.length;
+    const yp=nr===1?50:Math.round(15+(ri/(nr-1))*72);
+    grp.forEach((b,ci)=>{
+      if(b.x===undefined) b.x=Math.round(50+(ci-(nc-1)/2)*25);
+      if(b.y===undefined) b.y=yp;
+    });
+  });
+}
+
 function defaultSettings(){
   return {
     buttons: makeDefaultButtons(),
@@ -437,7 +455,10 @@ function defaultSettings(){
 }
 function loadSettings(){
   try{
-    const raw=localStorage.getItem(SK);
+    // Try current version first
+    let raw=localStorage.getItem(SK);
+    // Migrate from v5 if needed
+    if(!raw){ raw=localStorage.getItem(SK_OLD); if(raw){ const old=JSON.parse(raw); (old.buttons||[]).forEach(b=>{delete b.x;delete b.y;}); raw=JSON.stringify(old); } }
     if(raw){
       const s=JSON.parse(raw);
       const d=defaultSettings();
@@ -445,16 +466,14 @@ function loadSettings(){
       if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
       if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
       if(!s.buttonSounds) s.buttonSounds={};
-      // backfill missing size fields
-      s.buttons.forEach((b,i)=>{
+      s.buttons.forEach(b=>{
         if(!b.w) b.w=92; if(!b.h) b.h=92;
         if(b.r===undefined) b.r=20;
         if(!b.fs) b.fs=36; if(!b.row&&b.row!==0) b.row=0;
         if(!b.rot) b.rot=0;
         if(!b.sound) b.sound='';
-        if(b.x===undefined) b.x=20+((i*22)%60);
-        if(b.y===undefined) b.y=15+((i*20)%70);
       });
+      backfillPositions(s.buttons);
       // backfill decor fields
       (s.decorImages||[]).forEach(d=>{
         if(!d.rot) d.rot=0;
