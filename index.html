@@ -59,6 +59,7 @@ input.crange::-moz-range-thumb{width:32px;height:32px;border-radius:50%;border:2
   box-shadow:0 3px 10px rgba(0,0,0,.5);cursor:pointer;
   transition:filter .12s,box-shadow .12s;
   display:inline-flex;align-items:center;justify-content:center;overflow:hidden;
+  will-change:transform,filter;
 }
 .btn .lbl{pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.9);line-height:1.1;white-space:pre-line;}
 .btn.has-img .lbl{display:none;}
@@ -163,6 +164,9 @@ input[type=file]{display:none;}
 @keyframes decorFloat{0%,100%{margin-top:0;}50%{margin-top:-14px;}}
 @keyframes decorPulse{0%,100%{transform:translate(-50%,-50%) rotate(var(--rot,0deg)) scale(1);}50%{transform:translate(-50%,-50%) rotate(var(--rot,0deg)) scale(1.18);}}
 @keyframes decorSpin{from{transform:translate(-50%,-50%) rotate(var(--rot,0deg));}to{transform:translate(-50%,-50%) rotate(calc(var(--rot,0deg) + 360deg));}}
+/* GPU-accelerated layers for animated decor */
+.decorAnim-float,.decorAnim-pulse,.decorAnim-spin{will-change:transform;}
+#decorLayer img{will-change:transform;}
 .decorAnim-float{animation-name:decorFloat;animation-timing-function:ease-in-out;animation-iteration-count:infinite;}
 .decorAnim-pulse{animation-name:decorPulse;animation-timing-function:ease-in-out;animation-iteration-count:infinite;}
 .decorAnim-spin{animation-name:decorSpin;animation-timing-function:linear;animation-iteration-count:infinite;}
@@ -779,11 +783,14 @@ function buildPayloadOff(b){
    HOLD SYSTEM
 ═══════════════════════════════════════════════════ */
 let holdBtn=null, holdTimer=null;
-const HEARTBEAT=200;
+const HEARTBEAT=100;
 function startHold(b){
-  holdBtn=b; mqttSend(b.topic||settings.defaultTopic, buildPayload(b));
+  holdBtn=b;
+  const topic=b.topic||settings.defaultTopic;
+  const payload=buildPayload(b);
+  mqttSend(topic, payload);
   clearInterval(holdTimer);
-  holdTimer=setInterval(()=>mqttSend(b.topic||settings.defaultTopic, buildPayload(b)), HEARTBEAT);
+  holdTimer=setInterval(()=>mqttSend(topic, payload), HEARTBEAT);
 }
 function stopHold(){
   clearInterval(holdTimer); holdTimer=null;
@@ -962,12 +969,11 @@ function attachEvents(el,b){
     if(editMode) return;
     if(b.mode==='hold'){ stopHold(); el.classList.remove('active-press'); }
   };
-  el.addEventListener('touchstart',onPress,{passive:false});
-  el.addEventListener('touchend',  onRelease,{passive:false});
-  el.addEventListener('touchcancel',onRelease,{passive:false});
-  el.addEventListener('mousedown', onPress);
-  el.addEventListener('mouseup',   onRelease);
-  el.addEventListener('mouseleave',onRelease);
+  // Use pointer events only — prevents double-fire on touch (touchstart+mousedown)
+  el.addEventListener('pointerdown', e=>{ e.preventDefault(); onPress(e); }, {passive:false});
+  el.addEventListener('pointerup',   e=>{ e.preventDefault(); onRelease(e); }, {passive:false});
+  el.addEventListener('pointercancel', e=>{ onRelease(e); }, {passive:false});
+  el.addEventListener('pointerleave', e=>{ onRelease(e); }, {passive:false});
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1654,7 +1660,9 @@ function applyDecorLayer(){
     } else if(d.anim==='orbit'){
       img.dataset.orbit='1';
       img.dataset.orbitSpeed=speed;
-      img.style.transform=`translate(-50%,-50%) rotate(${rot}deg)`;
+      img.dataset.rot=rot+'deg';
+      img.style.left=d.x+'%'; img.style.top=d.y+'%'; // base position fixed, transform handles offset
+      img.style.transform='translate(-50%,-50%)';
     } else {
       img.style.transform=`translate(-50%,-50%) rotate(${rot}deg)`;
     }
@@ -1668,30 +1676,44 @@ function applyDecorLayer(){
 
 function startDecorOrbitLoop(){
   const layer=document.getElementById('decorLayer');
-  const orbitImgs=()=>Array.from(layer.querySelectorAll('img[data-orbit="1"]'));
-  if(!orbitImgs().length){
+  // Cache orbit elements — avoid querySelectorAll every frame
+  const orbitEls=Array.from(layer.querySelectorAll('img[data-orbit="1"]'));
+  if(!orbitEls.length){
     if(decorOrbitRAF){ cancelAnimationFrame(decorOrbitRAF); decorOrbitRAF=null; }
     return;
   }
-  if(decorOrbitRAF) return; // already running — don't reset the time base
+  if(decorOrbitRAF) return;
   const t0=performance.now();
-  const radius=3.2; // orbit radius in % of viewport, kept small so it stays near its anchor point
+  const radius=3.2;
+  // Pre-parse dataset once
+  const meta=orbitEls.map(img=>({
+    img, speed:+img.dataset.orbitSpeed||4,
+    bx:+img.dataset.baseX, by:+img.dataset.baseY,
+    rot:img.dataset.rot||'0deg'
+  }));
+  const vw=window.innerWidth;
   const tick=now=>{
-    const els=orbitImgs();
-    if(!els.length){ decorOrbitRAF=null; return; }
-    els.forEach(img=>{
-      const speed=+img.dataset.orbitSpeed||4;
-      const elapsed=(now-t0)/1000;
-      const ang=(elapsed/speed)*2*Math.PI;
-      const bx=+img.dataset.baseX, by=+img.dataset.baseY;
-      const ox=bx+radius*Math.cos(ang);
-      const oy=by+radius*Math.sin(ang);
-      img.style.left=ox+'%'; img.style.top=oy+'%';
+    const elapsed=(now-t0)/1000;
+    meta.forEach(m=>{
+      const ang=(elapsed/m.speed)*2*Math.PI;
+      // Use translate() so the compositor handles it — no layout reflow
+      const ox=(radius*Math.cos(ang)/100*vw);
+      const oy=(radius*Math.sin(ang)/100*vw);
+      m.img.style.transform=`translate(calc(-50% + ${ox.toFixed(2)}px), calc(-50% + ${oy.toFixed(2)}px))`;
     });
     decorOrbitRAF=requestAnimationFrame(tick);
   };
   decorOrbitRAF=requestAnimationFrame(tick);
 }
+
+/* Pause animations when page not visible (saves CPU/battery on mobile) */
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    if(decorOrbitRAF){ cancelAnimationFrame(decorOrbitRAF); decorOrbitRAF=null; }
+  } else {
+    startDecorOrbitLoop();
+  }
+});
 
 document.getElementById('resetAllBtn').addEventListener('click',()=>{
   if(confirm('Reset ALL customization? This cannot be undone.')){
@@ -1856,7 +1878,8 @@ document.getElementById('addSliderBtn').addEventListener('click',()=>{
 });
 
 /* ── Global safety ── */
-document.addEventListener('touchend',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
+document.addEventListener('pointerup',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
+document.addEventListener('pointercancel',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
 window.addEventListener('blur',stopHold);
 
 /* ── Boot is handled by loadSettingsAsync().then(...) above ── */
