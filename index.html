@@ -444,12 +444,68 @@ function makeDefaultButtons(){
 }
 
 /* ═══════════════════════════════════════════════════
-   STORAGE
+   STORAGE  —  IndexedDB for media, localStorage for config
+   Media keys stored in IDB: buttonImages, buttonSounds,
+   background image, decorImages[].src, slider track/thumbImg
 ═══════════════════════════════════════════════════ */
-const SK='kayraSettings_v7';
-const SK_OLD='kayraSettings_v6';
+const SK='kayraSettings_v8';          // lightweight config key
+const SK_OLD_KEYS=['kayraSettings_v7','kayraSettings_v6','kayraSettings_v5'];
+const IDB_NAME='kayraMedia';
+const IDB_STORE='media';
+const IDB_VER=1;
 
-/* Compute row-based x,y for buttons that lack them */
+/* ── IndexedDB helpers ── */
+let _idb=null;
+function openIDB(){
+  if(_idb) return Promise.resolve(_idb);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IDB_NAME,IDB_VER);
+    req.onupgradeneeded=e=>{ e.target.result.createObjectStore(IDB_STORE); };
+    req.onsuccess=e=>{ _idb=e.target.result; res(_idb); };
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbGet(key){
+  const db=await openIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readonly');
+    const req=tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess=()=>res(req.result??null);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbSet(key,val){
+  const db=await openIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(val,key);
+    tx.oncomplete=res; tx.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbDel(key){
+  const db=await openIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete=res; tx.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbGetAll(prefix){
+  const db=await openIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readonly');
+    const store=tx.objectStore(IDB_STORE);
+    const result={}; const req=store.openCursor();
+    req.onsuccess=e=>{
+      const cur=e.target.result;
+      if(cur){ if(String(cur.key).startsWith(prefix)) result[cur.key]=cur.value; cur.continue(); }
+      else res(result);
+    };
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+
+/* ── Compute row-based x,y for buttons that lack them ── */
 function backfillPositions(buttons){
   const rg={};
   buttons.forEach(b=>{const r=b.row||0;(rg[r]=rg[r]||[]).push(b);});
@@ -468,8 +524,8 @@ function backfillPositions(buttons){
 function defaultSettings(){
   return {
     buttons: makeDefaultButtons(),
-    buttonImages:{},
-    buttonSounds:{},
+    buttonImages:{},    // kept in RAM only (loaded from IDB on boot)
+    buttonSounds:{},    // kept in RAM only
     background:{type:'color',value:'#1e1e1e'},
     decorImages:[],
     mqtt:{url:'wss://457653a60da34a48ba1f37c9d63209b1.s1.eu.hivemq.cloud:8884/mqtt',user:'Kayra',pass:'KayraandHona24/6/2025'},
@@ -477,53 +533,164 @@ function defaultSettings(){
     sliders:[{id:'speed',label:'Speed',min:60,max:255,value:200,unit:'/ 255',topic:'',msgKey:'speed',trackColor:'#444444',trackImg:null,thumbColor:'#4caf50',thumbImg:null,thumbShape:'circle'}]
   };
 }
-function loadSettings(){
+
+/* Strip large base64 blobs so only config goes to localStorage */
+function settingsToLite(s){
+  const lite=JSON.parse(JSON.stringify(s));
+  lite.buttonImages={};
+  lite.buttonSounds={};
+  if(lite.background&&lite.background.type==='image') lite.background={type:'image',value:'__idb__'};
+  (lite.decorImages||[]).forEach(d=>{ d.src='__idb__'; });
+  (lite.sliders||[]).forEach(sl=>{ sl.trackImg=null; sl.thumbImg=null; });
+  return lite;
+}
+
+/* ── Save: config → localStorage, media → IndexedDB ── */
+async function saveSettingsAsync(){
   try{
-    // Try current version first
+    // 1) Save lightweight config
+    localStorage.setItem(SK, JSON.stringify(settingsToLite(settings)));
+  }catch(e){ console.warn('localStorage write failed', e); }
+  try{
+    // 2) Save media to IDB
+    const ps=[];
+    Object.entries(settings.buttonImages||{}).forEach(([id,url])=>{ if(url) ps.push(idbSet('btnImg:'+id,url)); });
+    Object.entries(settings.buttonSounds||{}).forEach(([id,url])=>{ if(url) ps.push(idbSet('btnSnd:'+id,url)); });
+    if(settings.background&&settings.background.type==='image'&&settings.background.value&&settings.background.value!=='__idb__')
+      ps.push(idbSet('bg',settings.background.value));
+    (settings.decorImages||[]).forEach(d=>{ if(d.src&&d.src!=='__idb__') ps.push(idbSet('decor:'+d.id,d.src)); });
+    (settings.sliders||[]).forEach(sl=>{
+      if(sl.trackImg&&sl.trackImg!=='__idb__') ps.push(idbSet('slTrack:'+sl.id,sl.trackImg));
+      if(sl.thumbImg&&sl.thumbImg!=='__idb__') ps.push(idbSet('slThumb:'+sl.id,sl.thumbImg));
+    });
+    await Promise.all(ps);
+  }catch(e){ console.warn('IDB write failed', e); }
+}
+/* Sync wrapper used throughout existing code (fire-and-forget) */
+function saveSettings(){ saveSettingsAsync().catch(e=>console.warn(e)); }
+
+/* ── Load: config from localStorage, media from IndexedDB ── */
+async function loadSettingsAsync(){
+  let s=null;
+  try{
+    // Try new key first
     let raw=localStorage.getItem(SK);
-    // Migrate from v5 if needed
+    // Migrate from old versions
     if(!raw){
-      // migrate from v6 or v5
-      const oldRaw=localStorage.getItem(SK_OLD)||localStorage.getItem('kayraSettings_v5');
-      if(oldRaw){ const old=JSON.parse(oldRaw); (old.buttons||[]).forEach(b=>{delete b.x;delete b.y;}); raw=JSON.stringify(old); }
-    }
-    if(raw){
-      const s=JSON.parse(raw);
-      const d=defaultSettings();
-      if(!s.mqtt) s.mqtt=d.mqtt;
-      if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
-      if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
-      if(!s.buttonSounds) s.buttonSounds={};
-      if(!s.sliders) s.sliders=defaultSettings().sliders;
-      s.sliders.forEach(sl=>{
-        if(sl.trackColor===undefined) sl.trackColor='#444444';
-        if(sl.thumbColor===undefined) sl.thumbColor='#4caf50';
-        if(!sl.thumbShape) sl.thumbShape='circle';
-      });
-      s.buttons.forEach(b=>{
-        if(!b.w) b.w=92; if(!b.h) b.h=92;
-        if(b.r===undefined) b.r=20;
-        if(!b.fs) b.fs=36; if(!b.row&&b.row!==0) b.row=0;
-        if(!b.rot) b.rot=0;
-        if(!b.sound) b.sound='';
-      });
-      backfillPositions(s.buttons);
-      // backfill decor fields
-      (s.decorImages||[]).forEach(d=>{
-        if(!d.rot) d.rot=0;
-        if(!d.anim) d.anim='';
-        if(!d.animSpeed) d.animSpeed=4;
-      });
-      return s;
+      for(const ok of SK_OLD_KEYS){
+        raw=localStorage.getItem(ok);
+        if(raw) break;
+      }
+      if(raw){
+        // Old format had base64 embedded — we'll extract them into IDB below
+        const old=JSON.parse(raw);
+        // Reset positions so backfill runs fresh on very old schemas
+        if(SK_OLD_KEYS.slice(-1)[0]==='kayraSettings_v5')
+          (old.buttons||[]).forEach(b=>{delete b.x;delete b.y;});
+        s=old;
+      }
+    } else {
+      s=JSON.parse(raw);
     }
   }catch(e){}
-  return defaultSettings();
+
+  if(!s) s=defaultSettings();
+
+  const d=defaultSettings();
+  if(!s.mqtt)         s.mqtt=d.mqtt;
+  if(!s.defaultTopic) s.defaultTopic=d.defaultTopic;
+  if(!s.buttons||!s.buttons.length) s.buttons=d.buttons;
+  if(!s.buttonImages) s.buttonImages={};
+  if(!s.buttonSounds) s.buttonSounds={};
+  if(!s.sliders)      s.sliders=d.sliders;
+  if(!s.decorImages)  s.decorImages=[];
+
+  s.sliders.forEach(sl=>{
+    if(sl.trackColor===undefined) sl.trackColor='#444444';
+    if(sl.thumbColor===undefined) sl.thumbColor='#4caf50';
+    if(!sl.thumbShape) sl.thumbShape='circle';
+    sl.trackImg=sl.trackImg==='__idb__'?null:sl.trackImg;
+    sl.thumbImg=sl.thumbImg==='__idb__'?null:sl.thumbImg;
+  });
+  s.buttons.forEach(b=>{
+    if(!b.w) b.w=92; if(!b.h) b.h=92;
+    if(b.r===undefined) b.r=20;
+    if(!b.fs) b.fs=36; if(!b.row&&b.row!==0) b.row=0;
+    if(!b.rot) b.rot=0;
+    if(!b.sound) b.sound='';
+  });
+  backfillPositions(s.buttons);
+  s.decorImages.forEach(d=>{
+    if(!d.rot) d.rot=0;
+    if(!d.anim) d.anim='';
+    if(!d.animSpeed) d.animSpeed=4;
+    if(d.src==='__idb__') d.src='';
+  });
+
+  /* ── Load media from IDB ── */
+  try{
+    // Button images
+    const allBtnImg=await idbGetAll('btnImg:');
+    Object.entries(allBtnImg).forEach(([k,v])=>{ s.buttonImages[k.replace('btnImg:','')]=v; });
+
+    // Button sounds
+    const allBtnSnd=await idbGetAll('btnSnd:');
+    Object.entries(allBtnSnd).forEach(([k,v])=>{ s.buttonSounds[k.replace('btnSnd:','')]=v; });
+
+    // Background image
+    if(s.background&&s.background.type==='image'){
+      const bgData=await idbGet('bg');
+      if(bgData) s.background.value=bgData;
+      else s.background={type:'color',value:'#1e1e1e'};
+    }
+
+    // Decor images
+    for(const d of s.decorImages){
+      if(!d.src){ const src=await idbGet('decor:'+d.id); if(src) d.src=src; }
+    }
+
+    // Slider images
+    for(const sl of s.sliders){
+      if(!sl.trackImg){ const v=await idbGet('slTrack:'+sl.id); if(v) sl.trackImg=v; }
+      if(!sl.thumbImg){ const v=await idbGet('slThumb:'+sl.id); if(v) sl.thumbImg=v; }
+    }
+
+    /* ── Migrate: if old data had embedded base64, push it to IDB now and
+         remove large blobs from localStorage ── */
+    const hadOldKeys=SK_OLD_KEYS.some(k=>localStorage.getItem(k));
+    if(hadOldKeys){
+      await saveSettingsAsync();                      // write to IDB
+      SK_OLD_KEYS.forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} }); // free old space
+    }
+
+  }catch(e){ console.warn('IDB load error',e); }
+
+  return s;
 }
-function saveSettings(){
-  try{ localStorage.setItem(SK,JSON.stringify(settings)); }
-  catch(e){ alert('Save failed — localStorage may be full.'); }
-}
-let settings=loadSettings();
+
+/* Boot: load async, then init UI */
+let settings=defaultSettings();
+let _appReady=false;
+
+loadSettingsAsync().then(s=>{
+  settings=s;
+  _appReady=true;
+  applyBackground();
+  applyDecorLayer();
+  renderSliders();
+  renderButtons();
+  buildIconGrid();
+  buildBgPresets();
+  buildDecorList();
+  buildSliderSettingsGrid();
+  connectMQTT();
+}).catch(e=>{
+  console.error('Boot error',e);
+  _appReady=true;
+  applyBackground(); applyDecorLayer(); renderSliders(); renderButtons();
+  buildIconGrid(); buildBgPresets(); buildDecorList(); buildSliderSettingsGrid();
+  connectMQTT();
+});
 
 /* ═══════════════════════════════════════════════════
    MQTT
@@ -590,7 +757,7 @@ function connectMQTT(){
     mqttClient.on('offline',()=>{document.getElementById('status').textContent='🔌 Disconnected';});
   }catch(e){ document.getElementById('status').textContent='❌ Invalid URL'; }
 }
-connectMQTT();
+/* connectMQTT() is called in the boot promise after settings load */
 
 function mqttSend(topic,payload){
   if(!mqttClient||!mqttClient.connected) return;
@@ -1041,9 +1208,12 @@ document.getElementById('btnModalCancel').addEventListener('click',()=>{
 document.getElementById('btnModalDelete').addEventListener('click',()=>{
   if(!modalTarget) return;
   if(confirm('Delete button "'+modalTarget.label+'"?')){
-    settings.buttons=settings.buttons.filter(b=>b.id!==modalTarget.id);
-    delete settings.buttonImages[modalTarget.id];
-    delete settings.buttonSounds[modalTarget.id];
+    const id=modalTarget.id;
+    settings.buttons=settings.buttons.filter(b=>b.id!==id);
+    delete settings.buttonImages[id];
+    delete settings.buttonSounds[id];
+    idbDel('btnImg:'+id).catch(()=>{});
+    idbDel('btnSnd:'+id).catch(()=>{});
     saveSettings(); renderButtons(); buildIconGrid();
     document.getElementById('btnModal').classList.remove('open');
     modalTarget=null;
@@ -1525,7 +1695,14 @@ function startDecorOrbitLoop(){
 
 document.getElementById('resetAllBtn').addEventListener('click',()=>{
   if(confirm('Reset ALL customization? This cannot be undone.')){
-    settings=defaultSettings(); saveSettings(); renderButtons(); applyBackground(); applyDecorLayer();
+    settings=defaultSettings();
+    // Clear all IDB media
+    openIDB().then(db=>{
+      const tx=db.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+    }).catch(()=>{});
+    saveSettings();
+    renderButtons(); applyBackground(); applyDecorLayer();
     buildIconGrid(); buildBgPresets(); buildDecorList();
   }
 });
@@ -1682,14 +1859,7 @@ document.getElementById('addSliderBtn').addEventListener('click',()=>{
 document.addEventListener('touchend',e=>{ if(!e.target.closest('.btn')) stopHold(); },{passive:true});
 window.addEventListener('blur',stopHold);
 
-/* ── Boot ── */
-applyBackground(); applyDecorLayer();
-renderSliders();
-renderButtons();
-buildIconGrid();
-buildBgPresets();
-buildDecorList();
-buildSliderSettingsGrid();
+/* ── Boot is handled by loadSettingsAsync().then(...) above ── */
 </script>
 </body>
 </html>
